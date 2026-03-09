@@ -1,0 +1,17 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# AI
+.claude/
+
+# Editors
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+*.sublime-*
+
+# Node (skills CLI may create these)
+node_modules/
