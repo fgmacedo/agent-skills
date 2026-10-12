@@ -155,10 +155,10 @@ With a split pin the code must use only the API subset both versions share, and 
 
 ## 7. Archived or dead dependencies
 
-When a dependency's upstream is archived (example: Flask-Potion, archived 2025-04, last release 0.16.0 in 2019, pure Python, classifiers 2.7 and 3.4 to 3.6):
+When a dependency's upstream is archived (typical case: a pure-Python REST or serialization layer whose last release predates 2020 and whose classifiers stop at 3.6):
 
 1. Check whether the pinned release already imports on the target interpreter with the window chain. Pure-Python packages from the 2.7 era often do.
-2. Search the fork network for recent commits (`https://github.com/<org>/<repo>/forks?sort_by=last_updated`). A fork may already carry the fix for the newer framework (for Potion: `Zenysis/potion`, a 12-line Werkzeug 3 / Flask 2.3 patch, based on 0.15).
+2. Search the fork network for recent commits (`https://github.com/<org>/<repo>/forks?sort_by=last_updated`). A fork may already carry the fix for the newer framework; these patches are usually a few lines against the framework's import paths.
 3. Fork into your org, publish to your index with a `+yourorg.N` local version, pin it. Keep the fork single-source until the cutover, then apply the framework patches.
 4. Replacement (another REST layer) is a separate project; count the call sites before proposing it.
 

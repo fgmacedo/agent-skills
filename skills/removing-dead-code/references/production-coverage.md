@@ -2,9 +2,8 @@
 
 Static tools cannot prove an endpoint, a task, a cron job or a whole module
 dead. Only execution data can, and when one code base ships as many services
-(one uwsgi API, ~50 worker Deployments and ~90 CronJobs on Kubernetes is the
-reference case) only the **union** of execution data across all of them proves
-anything. A function the API never calls is routinely the heart of a cron job.
+(one API plus dozens of worker Deployments and CronJobs on Kubernetes) only the
+**union** of execution data across all of them proves anything. A function the API never calls is routinely the heart of a cron job.
 
 This document covers four techniques, then the full design for coverage.py
 across many services.
