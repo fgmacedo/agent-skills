@@ -107,35 +107,83 @@ Dead or stale, do not recommend: `caniusepython3` (unmaintained since 2021), `py
 
 ## 6. Framework chain that supports both interpreters
 
-The single-source window must stay inside these pins. Upgrade to them on the py2 side first, one package per PR, each deployed, so the cutover changes only the interpreter.
+The single-source window must stay inside these pins. Upgrade to them on the py2 side first, one package per PR, each deployed, so the cutover changes only the interpreter. "Measured" rows were smoke-tested on 2026-10-12 with `uv run --python X.Y --with pkg==ver` (import, app setup, one request, one ORM query); everything else comes from PyPI metadata and may differ from what actually imports.
+
+### Flask stack
+
+| Package | Last with 2.7 | First without | Highest 3.x the last-2.7 release runs on |
+|---|---|---|---|
+| Flask | 1.1.4 (pins Werkzeug<2, Jinja2<3, itsdangerous<2, click<8) | 2.0 | 3.13, measured (with the pins below) |
+| Werkzeug | 1.0.1 | 2.0 | 3.13, measured |
+| Jinja2 | 2.11.3 | 3.0 | 3.13, measured |
+| MarkupSafe | 1.1.1 (py2 side); pin 2.0.1 on the py3 side, 2.1 removed `soft_unicode` which Jinja2 2.11 imports | 2.0 | 3.13, measured |
+| itsdangerous | 1.1.0 | 2.0 | 3.13, measured |
+| click | 7.1.2 | 8.0 | 3.13, measured |
+| Flask-SQLAlchemy | 2.5.1 | 3.0 | 3.13, measured |
+| Flask-RESTful | 0.3.10 | none yet (still declares 2.7) | classifiers to 3.8 |
+| flask-restx | 0.5.1 | 1.0 | classifiers to 3.8 |
+| Flask-Login | 0.5.0 | 0.6 | classifiers to 3.7 |
+| Flask-WTF / WTForms | 0.14.3 / 2.3.3 | 1.0 / 3.0 | classifiers to 3.8 |
+| Flask-Cors | 3.0.10 | 4.0 | classifiers to 3.7 |
+| Flask-Migrate | 2.7.0 | 3.0 | follows alembic |
+| Flask-Caching | none (1.x already requires >= 3.5); stay on Flask-Cache 0.13 or vendor | | |
+| Flask-Admin | none with 2.7 after 1.5.x (not re-verified) | | |
+
+### Django stack
+
+| Package | Last with 2.7 | First without | Highest 3.x the last-2.7 release runs on |
+|---|---|---|---|
+| Django | 1.11.29 (LTS, 2020-03) | 2.0 | **3.9, measured.** 3.10 fails at import (`from collections import Iterator` in `db/models/sql/query.py`); 3.12+ fails earlier (`django.utils.six.moves`) |
+| djangorestframework | 3.9.4 | 3.10 | 3.9, measured with Django 1.11.29 |
+| django-filter | 1.1.0 | 2.0 | classifiers to 3.6 |
+| drf-yasg | 1.17.1 | 1.20 | classifiers to 3.8 |
+| django-cors-headers | 3.0.0 | 3.1 | classifiers to 3.7 |
+| django-storages | 1.9.1 | 1.10 | classifiers to 3.8 |
+| django-debug-toolbar | 1.11.1 | 2.0 | classifiers to 3.7 |
+| pytest-django | 3.10.0 | 4.0 | classifiers to 3.8 |
+| factory_boy | 2.12.0 | 3.0 | classifiers to 3.7 |
+| django-redis | none (4.11 already requires >= 3.5); use `django.core.cache` with `redis` 3.5.3 or vendor 4.10 | | |
+| channels | none (2.x is py3 only) | | |
+
+The Django ceiling changes the plan. Django 1.11 cannot straddle 2.7 and anything newer than 3.9, and 3.9 is EOL. The route that keeps one variable per step: cut over on 3.9 with Django 1.11.29, then upgrade Django and Python alternately on the py3 side, each a deployed step with its own soak: Django 2.2 (3.5 to 3.9), Django 3.2 (3.6 to 3.10) then Python 3.10, Django 4.2 (3.8 to 3.12) then Python 3.12, Django 5.2 (3.10 to 3.13) then Python 3.13. Each Django LTS jump has its own deprecation list; `python -W error::RemovedInDjangoXXWarning` on the previous LTS is the gate, the same ratchet shape as the interpreter. Budget calendar for four soaks, not for the code.
+
+### Servers, task queues, other frameworks
+
+| Package | Last with 2.7 | First without | Notes |
+|---|---|---|---|
+| gunicorn | 19.10.0 | 20.0 | classifiers to 3.7; pure Python |
+| uWSGI | 2.0.x (C, builds against either interpreter) | | build two images from the same version |
+| celery / kombu / billiard | 4.4.7 / 4.6.11 / 3.6.4 | 5.0 | classifiers to 3.8 |
+| tornado | 5.1.1 | 6.0 | classifiers to 3.7; 6.0 removed the `tornado.gen` Python 2 paths and is asyncio-only |
+| Pyramid | 1.10.8 | 2.0 | classifiers to 3.9 |
+| Twisted | 20.3.0 | 21.2 | classifiers to 3.7 |
+| aiohttp, FastAPI, Starlette, channels | py3 only | | out of the window; adopt after the cutover |
+
+### Shared libraries
 
 | Package | Last with 2.7 | First without |
 |---|---|---|
-| Flask | 1.1.4 (pins Werkzeug<2, Jinja2<3, itsdangerous<2, click<8) | 2.0 |
-| Werkzeug | 1.0.1 | 2.0 |
-| Jinja2 | 2.11.3 | 3.0 |
-| MarkupSafe | 1.1.1 (py2 side); pin 2.0.1 on the py3 side, 2.1 removed `soft_unicode` which Jinja2 2.11 imports | 2.0 |
-| itsdangerous | 1.1.0 | 2.0 |
-| click | 7.1.2 | 8.0 |
 | SQLAlchemy | 1.4.54 | 2.0 |
-| Flask-SQLAlchemy | 2.5.1 | 3.0 |
 | alembic | 1.4.3 | 1.5 (not re-verified) |
 | psycopg2 | 2.8.6 | 2.9 |
 | mysqlclient (replaces MySQL-python, same `MySQLdb` import) | 1.4.6 | 2.0 |
 | PyMySQL | 0.10.1 (not re-verified) | 1.0 |
+| pymongo | 3.13.0 (classifiers to 3.11) | 4.0 |
+| mongoengine | 0.19.1 | 0.20 |
 | requests | 2.27.1 | 2.28 |
 | redis | 3.5.3 | 4.0 |
-| celery | 4.4.7 | 5.0 |
-| gunicorn | 19.10.0 | 20.0 |
 | gevent | 22.10.x (not verified on 3.12+) | 23 |
 | eventlet | 0.30.2 (2021; not verified on 3.12+, confirm in the spike) | 0.31 |
 | marshmallow | 2.21.0 | 3.0 |
+| lxml | 4.9.4 (wheels to 3.12) | 5.1 |
+| Pillow | 6.2.2 | 7.0 |
 | sentry-sdk | 1.45.x | 2.0 |
 | boto3/botocore | releases before 2021-07-15 | after |
 | jaeger-client | 4.4.0 | 4.5 |
+| Sphinx | 1.8.6 | 2.0 |
 | pandas / numpy | 0.24.2 / 1.16.6 (no wheels for 3.12+; split pin by marker) | 0.25 / 1.17 |
 
-Whether Flask 1.1.4 + Werkzeug 1.0.1 + Jinja2 2.11.3 import cleanly on 3.12+ is not documented anywhere. Measure it (spike in Phase 0). Flask 1.1.4 also carries open CVEs, which argues for a short window.
+Classifiers are an upper bound on what the maintainers tested, never on what imports. The Flask chain declares 3.8 at most and runs on 3.13; Django 1.11 declares 3.7 and runs on 3.9. Measure your own chain in the Phase 0 spike. Flask 1.1.4 and Django 1.11 both carry open CVEs, which argues for a short window.
 
 Wheel check for the target before building the spike image:
 

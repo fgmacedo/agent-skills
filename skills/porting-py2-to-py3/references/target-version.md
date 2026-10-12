@@ -8,7 +8,7 @@ Porting 2.7 straight to the newest 3.x costs almost the same as porting to an ol
 
 What a newer target does change:
 - Converter tooling (`futurize`, `modernize`, `2to3`) needs `lib2to3`, removed in 3.13. Run the converter under 2.7 or 3.12. This constrains the converter machine, never the target.
-- The framework chain that still supports 2.7 (Flask 1.1.4, Werkzeug 1.0.1, Jinja2 2.11.3, SQLAlchemy 1.4.x) may not run on the newest 3.x. Measure it with a one-day spike (build the py3 image with the py2-compatible chain pinned, run `compileall` and `pytest --collect-only`). If the chain fails on the target, cut over on the newest version it runs on and upgrade the framework as the next project. One variable at a time.
+- The framework chain that still supports 2.7 may not run on the newest 3.x, and this is the one factor that can force an old target. Measured 2026-10-12: the Flask chain (Flask 1.1.4, Werkzeug 1.0.1, Jinja2 2.11.3, MarkupSafe 2.0.1, SQLAlchemy 1.4.54, Flask-SQLAlchemy 2.5.1) runs on 3.13; Django 1.11.29 with DRF 3.9.4 runs on 3.9 and fails to import on 3.10+. Measure your own chain with a one-day spike (build the py3 image with the py2-compatible chain pinned, import it, serve one request). If the chain fails on the target, cut over on the newest version it runs on and upgrade the framework as the next project. One variable at a time. `references/tooling.md`, section 6, has the per-stack ceilings and the Django ladder.
 - On 3.14, `except X, e:` parses again (PEP 758) with the meaning `except (X, e):`. Unconverted handlers compile and fail only when an exception arrives. Gate syntax with ruff or a 3.13 interpreter, not with `compileall` on 3.14.
 
 ## Per-version table
@@ -35,8 +35,9 @@ What a newer target does change:
 
 1. Exclude every version that is EOL or will be within a year of your cutover date.
 2. Exclude versions below the floor of the dependencies you intend to run after the port (SQLAlchemy 2.1 means >= 3.11).
+   Exception: when the py2-compatible framework chain has a ceiling below that floor (Django 1.11 stops at 3.9), the cutover target is the ceiling, even if EOL, and the framework ladder follows on the py3 side. Rule 1 then applies to the end of the ladder, not to the cutover.
 3. Among the rest, prefer the newest with full wheel coverage for your dependency set and the longest support window. Treat the next version as a go/no-go once the suite is green: if CI passes on it, take it and skip an upgrade cycle.
 4. Pin the choice everywhere at once: `requires-python`, ruff `target-version`, `pyupgrade --pyXY-plus`, Dockerfile base image, CI matrix, and the project's agent instructions file.
 5. Run the py3 suite with `-W error::DeprecationWarning` so the next version's removals show up now.
 
-In October 2026 the rule yields 3.13, with 3.14 as the go/no-go candidate.
+In October 2026 the rule yields 3.13 for Flask and most non-framework code bases, with 3.14 as the go/no-go candidate; for Django 1.11 code bases it yields 3.9 at cutover and 3.13 at the end of the ladder.
