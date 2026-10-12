@@ -9,6 +9,8 @@ These skills work with [Claude Code](https://docs.anthropic.com/en/docs/claude-c
 | Skill | Description |
 |-------|-------------|
 | [python-profiling](skills/python-profiling/) | Structured workflow for profiling and optimizing Python code — CPU hotspots, memory usage, and benchmark-driven validation. |
+| [porting-py2-to-py3](skills/porting-py2-to-py3/) | Phased methodology for porting a Python 2.7 codebase to Python 3 while the team keeps shipping: target version, dependency strategy, CI gates, agent loops, staged rollout. |
+| [removing-dead-code](skills/removing-dead-code/) | Safe removal of dead code and unused dependencies, ordered by the proof each deletion needs, with production coverage across many services. |
 
 ## Installation
 
@@ -22,6 +24,8 @@ npx skills add fgmacedo/agent-skills
 
 ```bash
 npx skills add fgmacedo/agent-skills --skill python-profiling
+npx skills add fgmacedo/agent-skills --skill porting-py2-to-py3
+npx skills add fgmacedo/agent-skills --skill removing-dead-code
 ```
 
 ### List available skills
@@ -47,6 +51,27 @@ A measurement-driven workflow for making Python code faster and leaner. Guides t
 **Trigger phrases:** "make this faster", "profile this code", "reduce memory usage", "find bottlenecks", "this is slow", "optimize performance"
 
 **Tools covered:** cProfile, line_profiler, py-spy, tracemalloc, memray, scalene, snakeviz, pytest-benchmark
+
+### porting-py2-to-py3
+
+A phased workflow for moving a Python 2.7 codebase to Python 3 without a long-lived branch. Guides the agent through:
+
+1. **Safety net**: lockfile of what production really runs, coverage gate, golden tests for hashes, tokens and IDs, a one-day spike on the target interpreter
+2. **Parseable first**: the syntax-only `futurize --stage1` fixers, so Python 3 tooling can read the code while it still runs on 2.7
+3. **Shrink the surface**: hands off to `removing-dead-code`
+4. **Modernize on 2.7**: `six` shims, dependency upgrades to the last py2-compatible versions, `python2 -3 -Werror` runs
+5. **Ratchet**: a Python 3 CI job with a known-failures list that only moves forward, and a symptom-to-fix table for bytes/str, views, ordering and pickles
+6. **Cutover and cleanup**: two images per commit, per-workload switch, cache namespacing, then `pyupgrade`/ruff `UP`
+
+**Trigger phrases:** "port to Python 3", "Python 2.7", "futurize", "2to3", "six", "unicode_literals", "basestring", "which Python version should we target"
+
+**References included:** catalog of every 2→3 change classified as mechanical or judgment, tooling and pin tables, per-version removal table, case studies (Instagram, Dropbox, Yelp, Mercurial), plus a py2-idiom census script and a compile gate script.
+
+### removing-dead-code
+
+Deletion ordered by the proof it needs. Guides the agent through unused imports, unreachable code, unreferenced modules, routes and jobs with zero production hits, and unused dependencies, with one removal per commit carrying its evidence. Covers static tools (vulture, pyflakes, ruff, deptry) and dynamic evidence (coverage.py in production combined across many services, tombstones, access logs).
+
+**Trigger phrases:** "remove dead code", "is this still used", "unused dependencies", "clean up before migration"
 
 ## Who This Is For
 
