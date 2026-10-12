@@ -210,6 +210,11 @@ proves a function dead. A function unhit by the API is routinely hit by a cron
 job. `references/production-coverage.md` covers collection post-fork,
 persistence, sampling, combination, the time window and the output format.
 
+py-spy is the cheap complement: sampled from outside every pod, it proves a
+function **alive** and removes it from the candidate list, but a function it
+never saw is unknown, not dead. Prune with py-spy, prove with coverage or a
+tombstone.
+
 ```bash
 coverage combine --keep data/*/.coverage.*
 coverage json -o combined.json

@@ -26,7 +26,7 @@ first so the source parses as Python 3 while still running on 2.7.
 | mypy `--warn-unreachable` / pyright | unreachable branches | Partly (old mypy `--py2`) | after typing |
 | jedi/parso <= 0.7.1 | find usages | Yes (py2 grammar) | parso 0.8.0 dropped py2; jedi 0.17.x as the matching line is [unverified] |
 | coverage 5.5 | executed lines in production or staging | Yes, under 2.7 | 6.0 dropped 2.7; `parallel` + `combine` |
-| py-spy | sampled live functions | Yes (2.3-2.7, out of process) | proves live only |
+| py-spy | sampled live functions | Yes (2.3-2.7, out of process) | proves live only; prunes candidates, never confirms a deletion |
 | `sys.setprofile` recorder, tombstones, probes | function hit, last hit | Yes (own code) | strongest proof for a single suspect |
 | `flask routes` + access logs | unhit endpoints | Yes | map `$request_uri` to rule templates |
 | pip-check-reqs 2.0.4 | extra and missing requirements | Yes, under 2.7 | 3.x requires >= 3.10 |

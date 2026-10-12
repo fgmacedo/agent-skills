@@ -14,8 +14,8 @@ across many services.
 |---|---|---|---|
 | coverage.py in production | every executed line, per service | C tracer, roughly 1.3x to 2x CPU on web workloads [unverified] | coverage 5.5 |
 | Tombstone or probe | one suspect function was or was not called, with a timestamp | near zero | own code |
-| `sys.setprofile` recorder | set of `(file, function)` called at least once | low, no line data | own code |
-| py-spy sampling | functions seen on the stack | out of process, no code change | 2.3-2.7 supported |
+| `sys.setprofile` recorder | set of `(file, function)` called at least once | one Python call per `call` event; not measured against the C tracer | own code |
+| py-spy sampling | functions seen on the stack: proof of life, never proof of death | out of process, zero in the target | 2.3-2.7 supported |
 | Access logs, APM, task counters | hits per route and per task | already collected | n/a |
 
 ### Tombstones and probes
@@ -82,16 +82,50 @@ def install(flush, interval=300):
     t.start()
 ```
 
-Cheap enough for production on 2.7. Same post-fork rule as coverage.py below.
+The hook is a Python function invoked on every `call` and `return` event, so
+on call-heavy code its cost is of the same order as coverage's C tracer, not
+below it. Measure before preferring it. Same post-fork rule as coverage.py
+below.
 
-### py-spy
+### py-spy: proof of life, not proof of death
+
+py-spy samples the stack from outside the process (default 100 Hz), costs
+nothing in the target, needs no code change and runs against Python 2.3-2.7.
+Its semantics are the opposite of coverage: a function seen in a sample is
+**alive**, and a function never seen is **unknown**.
+
+The chance of catching one execution of duration `d` at rate `f` is about
+`d * f`. A 1 ms function at 100 Hz is caught 10% of the time, so ten runs a
+day show up within days. A 50 us function in a monthly job has a 0.5% chance
+per month. Those rare, short functions are exactly the deletion candidates,
+and the number of executions is the unknown you are trying to resolve, so
+absence of samples cannot be turned into a confidence level.
+
+Use it as the pruning stage before the deterministic ones:
+
+1. Static tools produce the candidate list (vulture, `dead`).
+2. py-spy runs on **every** pod, not one sampled replica, for one to two
+   weeks. Every function that appears in the aggregated samples leaves the
+   list. This removes most false positives for hot and warm code quickly.
+3. What survives goes to a deterministic check: a tombstone per survivor when
+   the list is short, coverage on one replica when it is long.
 
 ```bash
-py-spy record --pid "$PID" --format raw --subprocesses --nonblocking --duration 600 -o samples.txt
+py-spy record --pid "$PID" --format raw --subprocesses --nonblocking \
+    --rate 100 --duration 600 -o samples-$(date +%s).txt
+sed 's/ [0-9]*$//' samples-*.txt | tr ';' '\n' \
+    | sed -E 's/:[0-9]+\)$/)/' | sort -u > seen_functions.txt
 ```
 
-Aggregate function names over weeks. Sampling proves live only; absence of
-samples never proves dead.
+The raw format is one collapsed stack per line, `name (file:line)` frames
+joined by `;` and a trailing sample count; the pipeline above keeps one entry
+per function regardless of the sampled line.
+
+Operational notes: the sidecar or node agent needs `SYS_PTRACE` (or
+`shareProcessNamespace: true` in the pod), `--subprocesses` follows uwsgi and
+gunicorn workers from the master pid, and `--nonblocking` avoids pausing the
+target at the cost of occasional inconsistent samples. Delete nothing on
+py-spy evidence alone.
 
 ## coverage.py across many services
 
