@@ -254,7 +254,7 @@ libraries that 20 lines of stdlib replace.
 
 ## Dynamic detection, in brief
 
-See `production-coverage.md` for the full design.
+See `python-production-coverage.md` for the full design.
 
 - coverage 5.5 is the last line that supports 2.7 (https://pypi.org/project/coverage/5.5/;
   6.0 dropped 2.7 and 3.5, https://pypi.org/project/coverage/6.0/). Modern cores

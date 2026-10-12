@@ -10,7 +10,7 @@ These skills work with [Claude Code](https://docs.anthropic.com/en/docs/claude-c
 |-------|-------------|
 | [python-profiling](skills/python-profiling/) | Structured workflow for profiling and optimizing Python code — CPU hotspots, memory usage, and benchmark-driven validation. |
 | [porting-py2-to-py3](skills/porting-py2-to-py3/) | Phased methodology for porting a Python 2.7 codebase to Python 3 while the team keeps shipping: target version, dependency strategy, CI gates, agent loops, staged rollout. |
-| [removing-dead-code](skills/removing-dead-code/) | Safe removal of dead code and unused dependencies, ordered by the proof each deletion needs, with production coverage across many services. |
+| [removing-dead-code](skills/removing-dead-code/) | Language-neutral removal of dead code and unused dependencies, ordered by the proof each deletion needs, with production coverage across many services. Python reference included. |
 
 ## Installation
 
@@ -69,7 +69,7 @@ A phased workflow for moving a Python 2.7 codebase to Python 3 without a long-li
 
 ### removing-dead-code
 
-Deletion ordered by the proof it needs. Guides the agent through unused imports, unreachable code, unreferenced modules, routes and jobs with zero production hits, and unused dependencies, with one removal per commit carrying its evidence. Covers static tools (vulture, pyflakes, ruff, deptry) and dynamic evidence (coverage.py in production combined across many services, tombstones, access logs).
+Deletion ordered by the proof it needs. Guides the agent through unused imports, unreachable code, unreferenced modules, routes and jobs with zero production hits, and unused dependencies, with one removal per commit carrying its evidence. The workflow is language-neutral: tool categories, the dynamic-reference checklist and the multi-service production coverage design. Each language gets a `references/<language>.md` with its tools and commands; Python ships today (vulture, pyflakes, ruff, deptry, coverage.py, py-spy, tombstones), other languages follow the same structure.
 
 **Trigger phrases:** "remove dead code", "is this still used", "unused dependencies", "clean up before migration"
 
