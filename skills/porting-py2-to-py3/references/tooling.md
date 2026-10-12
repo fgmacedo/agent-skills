@@ -127,14 +127,31 @@ The single-source window must stay inside these pins. Upgrade to them on the py2
 | redis | 3.5.3 | 4.0 |
 | celery | 4.4.7 | 5.0 |
 | gunicorn | 19.10.0 | 20.0 |
-| gevent | 22.10.x | 23 |
+| gevent | 22.10.x (not verified on 3.12+) | 23 |
+| eventlet | 0.30.2 (2021; not verified on 3.12+, confirm in the spike) | 0.31 |
 | marshmallow | 2.21.0 | 3.0 |
 | sentry-sdk | 1.45.x | 2.0 |
 | boto3/botocore | releases before 2021-07-15 | after |
 | jaeger-client | 4.4.0 | 4.5 |
-| pandas / numpy | 0.24.2 / 1.16.6 | 0.25 / 1.17 |
+| pandas / numpy | 0.24.2 / 1.16.6 (no wheels for 3.12+; split pin by marker) | 0.25 / 1.17 |
 
 Whether Flask 1.1.4 + Werkzeug 1.0.1 + Jinja2 2.11.3 import cleanly on 3.12+ is not documented anywhere. Measure it (spike in Phase 0). Flask 1.1.4 also carries open CVEs, which argues for a short window.
+
+Wheel check for the target before building the spike image:
+
+```bash
+pip download --only-binary=:all: --python-version 313 --platform manylinux2014_x86_64 \
+    --no-deps -d /tmp/wheels -r requirements.txt
+```
+
+Packages that fail here need a source build in the image (compiler and headers, slower builds) or a split pin:
+
+```
+pandas==0.24.2; python_version < "3"
+pandas==2.3.*; python_version >= "3"
+```
+
+With a split pin the code must use only the API subset both versions share, and the outputs of that code need golden tests (exports, aggregations), because the two versions can differ in defaults (dtype inference, `sort` behaviour, rounding).
 
 ## 7. Archived or dead dependencies
 

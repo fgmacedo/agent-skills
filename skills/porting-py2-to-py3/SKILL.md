@@ -33,12 +33,12 @@ keeps shipping on the same tree.
 
 Done when: the environment is reproducible, CI publishes coverage and fails on regression, golden tests exist for every persisted invariant, and the spike has answered which interpreter the current framework chain runs on.
 
-1. **Freeze what production really runs.** `pip freeze` inside the production image becomes a versioned lockfile. Base images maintained elsewhere often install unpinned packages that the repo never names (SQLAlchemy, DB drivers, memcache clients). Those are dependencies too.
+1. **Freeze what production really runs.** `pip freeze` inside the production image becomes a versioned lockfile. Base images maintained elsewhere often install unpinned packages that the repo never names (SQLAlchemy, DB drivers, memcache clients). Those are dependencies too. If the base image belongs to another team, build your own from `python:2.7.18-slim` plus the lockfile now: the py3 image needs the same layout, and the switch stops depending on their calendar.
 2. **Pick the target version** with the decision rule in `references/target-version.md`. Write it into the project's README and agent instructions file in the same PR.
 3. **Coverage as a gate.** Run the suite with `coverage` (5.5 on py2) in CI, publish the number, set `fail_under` to the current value. Start collecting coverage from production or staging now (see removing-dead-code for the multi-service design); the window must be long before Phase 2 needs it.
 4. **Golden tests for cross-version invariants.** Record outputs under py2 as fixtures and assert byte-equality under both interpreters: IDs derived from hashes or `sys.maxint`, signed tokens, encrypted payloads, cache keys, serialized exports (JSON, CSV, XLSX, PDF), URLs built from user data, anything parsed by another system. These are the tests that catch `b'...'` leaks and rounding drift before a deploy does.
-5. **One-day spike.** Build a py3 image on the target with the py2-compatible framework chain pinned (`references/tooling.md`, section 6). Run `scripts/py3_compile_gate.sh` with `-t tests`. If the chain imports on the target, the cutover changes only the interpreter. If it does not, cut over on the newest version it runs on and make the framework upgrade the next project. One variable at a time.
-6. **Dependency inventory.** For every package: last version with 2.7, first without, whether the pinned version imports on the target. Internal packages without py3 builds go to their owners now; they are the calendar risk. Archived upstreams get a fork (`references/tooling.md`, section 7). From this point: no new package without py3 support.
+5. **One-day spike.** Build a py3 image on the target with the py2-compatible framework chain pinned (`references/tooling.md`, section 6) and import the chain in isolation, since the application still has py2 syntax at this point: `python3 -c "import flask, flask_sqlalchemy, sqlalchemy, <driver>, <rest layer>, <event loop lib>"` plus a minimal app factory smoke test. Check wheels for the target with `pip download --only-binary=:all: --python-version 3XY --platform manylinux2014_x86_64 -r requirements.txt` before building; a C extension without a wheel for the target either builds from source in the image or forces a split pin (step 6). If the chain imports on the target, the cutover changes only the interpreter. If it does not, cut over on the newest version it runs on and make the framework upgrade the next project. One variable at a time. The `-t tests` stage of the compile gate only becomes meaningful after Phase 1.
+6. **Dependency inventory.** For every package: last version with 2.7, first without, whether the pinned version imports on the target, and whether a wheel exists for the target. Internal packages without py3 builds go to their owners now; they are the calendar risk. Archived upstreams get a fork (`references/tooling.md`, section 7). A package that cannot straddle both interpreters (its last py2 release has no build for the target: pandas 0.24, numpy 1.16, often psycopg2 2.8 and mysqlclient 1.4 without source builds) gets a **split pin** by environment marker, `pkg==old; python_version<"3"` and `pkg==new; python_version>="3"`, code restricted to the API subset both versions share, and golden tests for its outputs. From this point: no new package without py3 support.
 7. **Baseline the census.** `python3 scripts/py2ism_census.py SRC --save py2ism-baseline.json` and add `--check` to CI. Teammates cannot add Python 2 idioms from now on.
 
 ## Phase 1: parseable on the target (on main, behaviour identical on 2.7)
@@ -51,15 +51,15 @@ Apply only the syntax fixers of `futurize --stage1`, under 2.7, one fixer per PR
 
 Done when: the dead-code candidates with proof have been removed and soaked.
 
-Use the removing-dead-code skill: unused imports, unreachable code, unreferenced modules, routes and jobs with zero production hits, unused dependencies. Do it after Phase 1 so the py3 tools work, with the production coverage started in Phase 0.
+Use the removing-dead-code skill: unused imports, unreachable code, unreferenced modules, routes and jobs with zero production hits, unused dependencies. Do it after Phase 1 so the py3 tools work, with the production coverage started in Phase 0. Route, job and whole-module removal needs at least 30 days of production coverage (12 months or a calendar audit for seasonal jobs). If the deadline does not allow the window, bound this phase to the static proofs (imports, unreachable code, unreferenced private symbols, unused dependencies) and let the collector keep running; the dynamic removals come after the cutover.
 
 ## Phase 3: modernize while staying on 2.7 (on main, small PRs)
 
-Done when: the census shows zero non-informational occurrences outside `six` shims, the py2 suite passes under `python2 -3 -Werror::DeprecationWarning -Qwarnall -R`, and every dependency is at its last py2-compatible version.
+Done when: the census shows zero non-informational occurrences outside `six` shims, the py2 suite passes under `python2 -3 -Werror::DeprecationWarning -Qwarnall -R -tt`, and every dependency is at its last py2-compatible version.
 
 1. Remaining `futurize --stage1` fixers: `fix_absolute_import`, `fix_has_key`, `fix_next_call`. Do not run `fix_dict` blindly; it wraps every `keys()`/`items()` in `list()` (see catalog E). Commit per fixer.
 2. Census loop (below) for the J categories: `basestring`/`unicode`/`long` via `six`, `iteritems`, `__metaclass__`, `e.message`, `sys.maxint`, stdlib renames via `six.moves`, integer division, `StringIO` vs `BytesIO`.
-3. Run the py2 suite with `-3 -Werror -Qwarnall -R`; it finds `cmp`, integer `/`, and order-dependent tests that grep cannot.
+3. Run the py2 suite with `-3 -Werror::DeprecationWarning -Qwarnall -R -tt`; it finds `cmp`, integer `/`, mixed indentation and order-dependent tests that grep cannot.
 4. Upgrade dependencies to their last py2-compatible versions, one package per PR, each deployed to production before the next: test runner first (pytest 4.6.11, mock 3.0.5), then the framework chain, then drivers (MySQL-python to mysqlclient 1.4.6), then backports replaced by environment markers (`functools32; python_version<"3"`).
 5. Keep the gates green: census `--check`, compile gate, optional `modernize --enforce`.
 
@@ -79,7 +79,7 @@ Done when: every workload runs the py3 image for the observation window (7 calen
 1. The branch changes only: base image to the target, the py3 lockfile, removal of py2-only markers. Merge main into it daily; it must not live longer than two weeks.
 2. CI builds **both** images from the same commit. Deploy manifests select the image per workload.
 3. Agree a merge freeze of 48 hours with the team for the switch of the API workload.
-4. Shared serialized state: memcached and queue pickles do not round-trip between interpreters. Namespace cache keys per interpreter (`py3:` prefix) or flush at cutover; pin `pickle` protocol 2 while both run. Verify signed sessions and tokens with the golden tests.
+4. Shared serialized state: memcached and queue pickles do not round-trip between interpreters. Namespace cache keys per interpreter (`py3:` prefix) or flush at cutover; pin `pickle` protocol 2 while both run. A namespaced cache starts cold for every workload that switches, so pace the switches and watch database load; warm the hottest keys from the py3 side first when the cache protects a database. Signed tokens (itsdangerous, JWT) stay valid across interpreters when the secret bytes and the JSON serializer are unchanged; the golden tests prove it, and a mismatch is escalated, not patched.
 5. Order: staging fully; then production by workload: idempotent CronJobs, then worker Deployments one replica at a time, then the API behind the existing router with a canary percentage per route. Tag errors with the interpreter version so the two populations are comparable.
 6. Keep the py2 image buildable for several weeks. Rollback is an image change, never a data migration.
 
@@ -91,6 +91,8 @@ Done when: every workload runs the py3 image for the observation window (7 calen
 
 ## Agent loops
 
+Calendar, from the case studies and scaled by size: parseability takes days to two weeks; importability weeks; functional parity is the long tail (weeks for 100k lines, months for millions) and is where the ratchet loop lives; each production observation window is 7 days and does not compress; other teams' packages are the item most likely to slip. Separate effort from calendar in any estimate.
+
 Each loop has a unit of work, a batch size and a stop condition. Run them until the stop condition holds, then move to the next phase. Judgment steps (J) are decided per site with the procedure in the catalog; escalate only the items under "Escalate".
 
 ### Census loop (Phases 1 and 3)
@@ -100,7 +102,7 @@ python3 scripts/py2ism_census.py SRC          # worklist by category
 pick one category
 for each file with hits:
     apply the catalog rule for that category (M: run the tool; J: decide per site)
-    python2 -3 -Werror::DeprecationWarning -m pytest tests/ -x
+    python2 -3 -Werror::DeprecationWarning -Qwarnall -R -tt -m pytest tests/ -x
 commit "<category>: <directory>" (one category x one directory per commit)
 python3 scripts/py2ism_census.py SRC --check py2ism-baseline.json
 ```
@@ -167,7 +169,7 @@ Everything else is decided by the loop with the catalog procedure.
 | 0 safety net | `pip freeze` in prod image; coverage 5.5; golden tests; spike image | lockfile; `fail_under`; spike answered; census baseline |
 | 1 parseable | `futurize --stage1 -f <fixer>` under 2.7 | `py3_compile_gate.sh` zero errors, required in CI |
 | 2 shrink | removing-dead-code skill | candidates removed with proof, soaked |
-| 3 modernize | remaining stage1 fixers; `six`; `python2 -3 -Werror -Qwarnall -R`; dep upgrades one per PR | census zero; py2 suite green under `-3 -Werror`; deps at last py2 versions |
+| 3 modernize | remaining stage1 fixers; `six`; `python2 -3 -Werror::DeprecationWarning -Qwarnall -R -tt`; dep upgrades one per PR; split pins for packages that cannot straddle | census zero; py2 suite green under those flags; deps at last py2 versions |
 | 4 ratchet | py3 job with `-bb -W error::DeprecationWarning`; known-failures list; ratchet loop | py3 job required and green; golden tests equal |
 | 5 cutover | two images per commit; per-workload image switch; cache namespacing; canary by route | 7-day observation at baseline |
 | 6 cleanup | `pyupgrade --py3XX-plus`; ruff `UP`; drop py2 leg | permanent `-W error::DeprecationWarning` |
@@ -192,12 +194,13 @@ Everything else is decided by the loop with the catalog procedure.
 - [ ] Target version chosen by the decision rule and written into the repo
 - [ ] Coverage published in CI with `fail_under`; production coverage collection started
 - [ ] Golden tests for every hash, token, ID, cache key and export
-- [ ] Spike answered: does the py2-compatible chain import on the target?
+- [ ] Spike answered: does the py2-compatible chain import on the target, and do wheels exist for it?
+- [ ] Own base image built from the lockfile (or the base image owner committed to a py3 variant on your dates)
 - [ ] Dependency table: last with 2.7 / first without / imports on target; owners pinged for internal packages
 - [ ] Census baseline saved and `--check` in CI
 - [ ] Compile gate zero errors and required
 - [ ] Dead code removed with proof (sibling skill)
-- [ ] Census zero outside `six`; py2 suite green under `-3 -Werror -Qwarnall -R`
+- [ ] Census zero outside `six`; py2 suite green under `-3 -Werror::DeprecationWarning -Qwarnall -R -tt`
 - [ ] Dependencies at their last py2-compatible versions, each deployed
 - [ ] py3 job required and green with `-bb -W error::DeprecationWarning`
 - [ ] Both images built from one commit; cache keys namespaced; rollback rehearsed in staging
