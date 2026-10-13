@@ -137,8 +137,12 @@ pick the module with the lowest coverage
 for each uncovered branch:
     write the test that asserts the observable result (payload, status, persisted row), not only "no exception"
     run it on py2 and py3; a test that passes on one and fails on the other has found a divergence: fix per the catalog, at the boundary
+    a guard the tests cannot reach is removed with the type evidence in the commit body (what the producer returns, why None cannot arrive)
+    a fix in one backend or adapter is grepped in its siblings (same method name) and aligned, or the commit says why not
 commit tests and fixes per logical change; raise fail_under to the new floor on both legs
 ```
+
+Signal, hook and event order stays as it was (a "before" that fired on every call keeps firing on every call); reordering is a contract change and goes in its own PR.
 
 Batch: one module per commit. Stop: `fail_under = 100` on both legs with the per-interpreter pragmas. To parallelize, partition by file ownership: each agent owns disjoint source and test files and commits nothing; the coordinator integrates, runs both interpreters once, and commits per logical change (`git add -p` when one file carries two changes). Four agents covered 117 tests and 11 fixes in about seven minutes of wall-clock on the 7k-line library above.
 
@@ -228,7 +232,8 @@ Everything else is decided by the loop with the catalog procedure.
 - [ ] Census zero outside `six`; py2 suite green under `-3 -Werror::DeprecationWarning -Qwarnall -R -tt`
 - [ ] Dependencies at their last py2-compatible versions, each deployed
 - [ ] py3 job required and green with `-bb -W error::DeprecationWarning`; warning filters scoped by message and module
-- [ ] pyflakes clean on the target; uncovered risk lines reviewed; `fail_under = 100` on both legs with per-interpreter pragmas
+- [ ] pyflakes clean on the target; uncovered risk lines reviewed; `fail_under = 100` on both legs with per-interpreter pragmas exported for `run` and `report`
+- [ ] Shared requirements file fully pinned from `pip freeze` on each leg
 - [ ] Both images built from one commit; cache keys namespaced; rollback rehearsed in staging
 - [ ] Every workload on py3 for 7 days at baseline error rate
 - [ ] `pyupgrade`/ruff cleanup landed; py2 leg deleted; `-W error::DeprecationWarning` permanent

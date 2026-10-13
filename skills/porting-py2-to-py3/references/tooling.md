@@ -122,7 +122,7 @@ exclude_lines =
     def __repr__
 ```
 
-Tag the line `# pragma: py2 only` or `# pragma: py3 only`. The 2.7 job sets `COVERAGE_EXCLUDE_PY=3`, the target job sets `COVERAGE_EXCLUDE_PY=2`; unset expands to `py0 only` and excludes nothing. `coverage-conditional-plugin` does the same with less typing but is py3-only, so it cannot serve while the 2.7 leg exists. When diffing executed-line sets between legs, expect about fifty lines each way of tooling noise (coverage 5.5 and 7.x attribute `def` lines and docstrings differently); filter those before reading the diff.
+Tag the line `# pragma: py2 only` or `# pragma: py3 only`. The 2.7 job sets `COVERAGE_EXCLUDE_PY=3`, the target job sets `COVERAGE_EXCLUDE_PY=2`; unset expands to `py0 only` and excludes nothing. `exclude_lines` is evaluated by `coverage report`, not by `coverage run`: a `report` without the variable silently counts the other interpreter's branch as missed (a false 99%). Export it at job level so both commands see it. `coverage-conditional-plugin` does the same with less typing but is py3-only, so it cannot serve while the 2.7 leg exists. When diffing executed-line sets between legs, expect about fifty lines each way of tooling noise (coverage 5.5 and 7.x attribute `def` lines and docstrings differently); filter those before reading the diff.
 
 ### `-W error::DeprecationWarning` with the last-2.7 chain
 
@@ -132,19 +132,20 @@ The flag is unreachable on 3.12+ without filters: Werkzeug 1.0.1 uses `ast.Str` 
 [pytest]
 filterwarnings =
     ignore:ast\.Str is deprecated:DeprecationWarning:werkzeug\.routing
-    ignore:Attribute s is deprecated:DeprecationWarning
-    ignore:Constant\.__init__:DeprecationWarning
+    ignore:Attribute s is deprecated:DeprecationWarning:werkzeug\.routing
+    ignore:Attribute s is deprecated:DeprecationWarning:ast$
+    ignore:Constant\.__init__:DeprecationWarning:ast$
     ignore:datetime\.datetime\.utcfromtimestamp\(\) is deprecated:DeprecationWarning:itsdangerous\.timed
     ignore::sqlalchemy.exc.RemovedIn20Warning
 ```
 
-Never `ignore::DeprecationWarning` unscoped: it hides the removals in your own code. Python 3.14 is out of reach for this chain because `ast.Str` is removed there; it becomes a go/no-go after the Phase 6 framework upgrade.
+The `module` field matches the module the warning is attributed to by `stacklevel`, not the library whose call triggered it: Werkzeug calling `ast.Str(...)` produces warnings attributed to the stdlib `ast` module, and reading `.s` produces the same message attributed to `werkzeug.routing`, so each (message, module) pair is its own line. To find the attributed module, run `pytest -o filterwarnings= -W always::DeprecationWarning` once and read `file:line` in the warnings summary. Never `ignore::DeprecationWarning` unscoped, and never a message without a module: either hides the same warning raised from your own code. Python 3.14 is out of reach for this chain because `ast.Str` is removed there; it becomes a go/no-go after the Phase 6 framework upgrade.
 
 Dead or stale, do not recommend: `caniusepython3` (unmaintained since 2021), `pylint --py3k` (removed in pylint 2.11; only pylint 1.9.5 under 2.7 still has it), `unicode-nazi` (2011), `flake8-2020` (archived, only checks `sys.version` slicing), Bowler (archived 2025).
 
 ## 6. Framework chain that supports both interpreters
 
-The single-source window must stay inside these pins. Upgrade to them on the py2 side first, one package per PR, each deployed, so the cutover changes only the interpreter. "Measured" rows were smoke-tested on 2026-10-12 with `uv run --python X.Y --with pkg==ver` (import, app setup, one request, one ORM query); everything else comes from PyPI metadata and may differ from what actually imports.
+The single-source window must stay inside these pins. Upgrade to them on the py2 side first, one package per PR, each deployed, so the cutover changes only the interpreter. In a requirements file shared by both legs, pin every entry (markers for the ones that differ) to the version `pip freeze` shows in each environment; an unpinned transitive dependency resolves differently on the two legs and is the first thing a reviewer flags. "Measured" rows were smoke-tested on 2026-10-12 with `uv run --python X.Y --with pkg==ver` (import, app setup, one request, one ORM query); everything else comes from PyPI metadata and may differ from what actually imports.
 
 ### Flask stack
 
