@@ -1,0 +1,792 @@
+[[claim]]
+id = "pyright-default-mode-is-standard"
+ref = "pyright.md"
+statement = "With no typeCheckingMode, pyright runs standard: it reports the five rules standard adds over basic"
+probe = "pyright/standard-vs-basic"
+cmd = ["pyright", "m.py"]
+expect_exit = 1
+expect_output = [
+  "reportIncompatibleVariableOverride",
+  "reportIncompatibleMethodOverride",
+  "reportFunctionMemberAccess",
+  "reportOverlappingOverload",
+  "reportPossiblyUnbound",
+]
+
+[[claim]]
+id = "pyright-basic-drops-standard-rules"
+ref = "pyright.md"
+statement = "basic mode reports none of the standard-only rules (not even as warnings)"
+probe = "pyright/standard-vs-basic"
+cmd = ["pyright", "-p", "basic.json", "m.py"]
+expect_exit = 0
+expect_output = ["0 errors, 0 warnings"]
+
+[[claim]]
+id = "pyright-strict-only-rules"
+ref = "pyright.md"
+statement = "strict adds missing/unknown parameter, type-argument, private-usage, unused-import, unnecessary-isinstance and deprecated errors; explicit Any is not reported"
+probe = "pyright/strict-only"
+cmd = ["pyright", "m.py"]
+expect_exit = 1
+expect_output = [
+  "reportUnknownParameterType",
+  "reportMissingParameterType",
+  "reportMissingTypeArgument",
+  "reportPrivateUsage",
+  "reportUnusedImport",
+  "reportUnnecessaryIsInstance",
+  "reportUnnecessaryCast",
+  "reportMatchNotExhaustive",
+  "reportDeprecated",
+]
+expect_no_output = ["anything"]
+
+[[claim]]
+id = "pyright-file-comment-standard"
+ref = "pyright.md"
+statement = "`# pyright: standard` at the top of a file raises a basic project to standard for that file"
+probe = "pyright/file-comment-standard"
+cmd = ["pyright", "m.py"]
+expect_exit = 1
+expect_output = ["reportIncompatibleMethodOverride"]
+
+[[claim]]
+id = "pyright-honors-type-ignore-any-code"
+ref = "pyright.md"
+statement = "pyright treats `# type: ignore[anything]` as a blanket ignore for the line, whatever the code, and flags it when nothing needed suppressing"
+probe = "pyright/type-ignore-blanket"
+cmd = ["pyright", "m.py"]
+expect_output = [
+  ':6:\d+ - error: Unnecessary "# type: ignore" comment',
+]
+expect_no_output = ['m\.py:4:', 'm\.py:5:', 'm\.py:8:']
+
+[[claim]]
+id = "pyright-wrong-rule-name-not-suppressed"
+ref = "pyright.md"
+statement = "A `# pyright: ignore[...]` with a wrong rule name does not suppress the error and is itself reported as unnecessary"
+probe = "pyright/type-ignore-blanket"
+cmd = ["pyright", "m.py"]
+expect_output = [
+  ':7:\d+ - error: Cannot access attribute "missing"',
+  'Unnecessary "# pyright: ignore" rule: "reportPossiblyUnbound"',
+]
+
+[[claim]]
+id = "pyright-enable-type-ignore-false"
+ref = "pyright.md"
+statement = "enableTypeIgnoreComments=false makes pyright ignore `# type: ignore` entirely (no suppression, no unnecessary report)"
+probe = "pyright/type-ignore-blanket"
+cmd = ["pyright", "-p", "no-type-ignore.json", "m.py"]
+expect_output = [':4:\d+ - error: Cannot access', ':5:\d+ - error: Cannot access']
+expect_no_output = ['Unnecessary "# type: ignore"']
+
+[[claim]]
+id = "pyright-infers-unannotated-returns"
+ref = "pyright.md"
+statement = "pyright infers unannotated return types (and call-site returns for unannotated params); mypy sees Any"
+probe = "pyright/return-inference"
+cmd = ["pyright", "m.py"]
+expect_exit = 0
+
+[[claim]]
+id = "pyright-return-inference-mypy-any"
+ref = "pyright.md"
+statement = "mypy types the same unannotated returns as Any"
+probe = "pyright/return-inference"
+cmd = ["mypy", "m.py"]
+expect_exit = 1
+expect_output = ['Expression is of type "Any", not "X"']
+
+[[claim]]
+id = "pyright-return-inference-ty-unknown"
+ref = "pyright.md"
+statement = "ty types the same unannotated returns as Unknown"
+probe = "pyright/return-inference"
+cmd = ["ty", "check", "--output-format", "concise", "m.py"]
+expect_exit = 1
+expect_output = ["Type `Unknown` does not match asserted type `X`"]
+
+[[claim]]
+id = "pyright-checks-untyped-bodies"
+ref = "pyright.md"
+statement = "pyright checks bodies of unannotated functions; mypy skips them by default and assert_type there fails with an 'unchecked functions' note"
+probe = "pyright/untyped-body-checked"
+cmd = ["mypy", "m.py"]
+expect_output = ["annotation-unchecked", 'expects everything to be "Any" in unchecked functions']
+
+[[claim]]
+id = "pyright-untyped-body-pyright-errors"
+ref = "pyright.md"
+statement = "pyright reports both errors inside the unannotated test function"
+probe = "pyright/untyped-body-checked"
+cmd = ["pyright", "m.py"]
+expect_output = ["2 errors"]
+
+[[claim]]
+id = "pyright-outputjson-zero-based"
+ref = "pyright.md"
+statement = "--outputjson line numbers are 0-based (an error on line 3 has range.start.line 2)"
+probe = "pyright/outputjson-zero-based"
+cmd = ["pyright", "--outputjson", "m.py"]
+expect_output = ['"line": 2', '"errorCount": 1']
+
+[[claim]]
+id = "pyright-exit-warnings-only"
+ref = "pyright.md"
+statement = "Warnings alone exit 0"
+probe = "pyright/exit-codes"
+cmd = ["pyright", "m.py"]
+expect_exit = 0
+expect_output = ["1 warning"]
+
+[[claim]]
+id = "pyright-exit-warnings-flag"
+ref = "pyright.md"
+statement = "--warnings makes warnings exit 1"
+probe = "pyright/exit-codes"
+cmd = ["pyright", "--warnings", "m.py"]
+expect_exit = 1
+
+[[claim]]
+id = "pyright-exit-bad-config"
+ref = "pyright.md"
+statement = "An unparsable or missing config file exits 3"
+probe = "pyright/exit-codes"
+cmd = ["pyright", "-p", "bad.json", "m.py"]
+expect_exit = 3
+
+[[claim]]
+id = "pyright-exit-bad-flag"
+ref = "pyright.md"
+statement = "An unknown command-line flag exits 4"
+probe = "pyright/exit-codes"
+cmd = ["pyright", "--no-such-flag", "m.py"]
+expect_exit = 4
+
+[[claim]]
+id = "pyright-config-precedence"
+ref = "pyright.md"
+statement = "pyrightconfig.json wins over [tool.pyright]: an empty pyrightconfig.json silently discards strict from pyproject"
+probe = "pyright/config-precedence"
+cmd = ["pyright", "m.py"]
+expect_exit = 0
+expect_output = ["0 errors"]
+
+[[claim]]
+id = "pyright-python-version-typing-imports"
+ref = "pyright.md"
+statement = "With pythonVersion 3.10, `from typing import assert_type, reveal_type` is an error (reportAttributeAccessIssue); typing_extensions works"
+probe = "pyright/python-version-imports"
+cmd = ["pyright", "m.py"]
+expect_output = ['"assert_type" is unknown import symbol \(reportAttributeAccessIssue\)', '"reveal_type" is unknown import symbol']
+
+[[claim]]
+id = "pyright-assert-type-literal"
+ref = "pyright.md"
+statement = "assert_type(1, int) fails in pyright: the expression type is Literal[1]"
+probe = "pyright/python-version-imports"
+cmd = ["pyright", "m.py"]
+expect_output = ['expected "int" but received "Literal\[1\]"']
+
+[[claim]]
+id = "pyright-deprecated-off-in-standard"
+ref = "pyright.md"
+statement = "Calling a @deprecated function is not reported on the CLI in standard mode"
+probe = "pyright/deprecated-standard"
+cmd = ["pyright", "m.py"]
+expect_exit = 0
+expect_no_output = ["deprecated"]
+
+[[claim]]
+id = "pyright-deprecated-enabled"
+ref = "pyright.md"
+statement = "reportDeprecated = error reports the call"
+probe = "pyright/deprecated-standard"
+cmd = ["pyright", "-p", "strict-dep.json", "m.py"]
+expect_exit = 1
+expect_output = ['The function "old" is deprecated']
+
+[[claim]]
+id = "pyright-rule-map"
+ref = "pyright.md"
+statement = "Common pyright messages map to these rule names"
+probe = "pyright/rule-map"
+cmd = ["pyright", "--outputjson", "m.py"]
+expect_output = [
+  '"rule": "reportMissingImports"',
+  '"rule": "reportSelfClsParameterName"',
+  '"rule": "reportReturnType"',
+  '"rule": "reportRedeclaration"',
+  '"rule": "reportOptionalMemberAccess"',
+  '"rule": "reportAttributeAccessIssue"',
+  '"rule": "reportArgumentType"',
+  '"rule": "reportCallIssue"',
+  '"rule": "reportIndexIssue"',
+  '"rule": "reportOperatorIssue"',
+  '"rule": "reportAssignmentType"',
+  '"rule": "reportOptionalSubscript"',
+  '"rule": "reportFunctionMemberAccess"',
+  'must be a supertype of its class',
+]
+
+[[claim]]
+id = "pyright-generaltypeissues-remaining"
+ref = "pyright.md"
+statement = "Some messages still use reportGeneralTypeIssues: 'cls must be a supertype of its class', 'X is not iterable'"
+probe = "pyright/rule-map"
+cmd = ["pyright", "m.py"]
+expect_output = [
+  'must be a supertype of its class "C" \(reportGeneralTypeIssues\)',
+  '"int" is not iterable[^\n]*\n[^\n]*\(reportGeneralTypeIssues\)',
+]
+
+[[claim]]
+id = "pyright-execution-environments-rules"
+ref = "pyright.md"
+statement = "executionEnvironments entries accept per-root rule overrides (reportMissingImports none for scripts only)"
+probe = "pyright/execution-environments"
+cmd = ["pyright"]
+expect_exit = 1
+expect_output = ['src/a\.py:1:8 - error']
+expect_no_output = ['scripts/a\.py']
+
+[[claim]]
+id = "pyright-verifytypes-needs-import-path"
+ref = "pyright.md"
+statement = "--verifytypes does not find a package that only sits in the current directory: 'No py.typed file found', 0%"
+probe = "pyright/verifytypes-local"
+cmd = ["pyright", "--verifytypes", "vtpkg", "--ignoreexternal"]
+expect_exit = 1
+expect_output = ["No py.typed file found", "Type completeness score: 0%"]
+
+[[claim]]
+id = "pyright-verifytypes-ambiguous-attrs"
+ref = "pyright.md"
+statement = "--verifytypes flags unannotated public attributes assigned non-literal values as ambiguous, ignores literal ones, and treats a non-aliased import outside __all__ as private"
+probe = "pyright/verifytypes-local"
+cmd = ["sh", "-c", "PYTHONPATH=$PWD pyright --verifytypes vtpkg --ignoreexternal"]
+expect_exit = 1
+expect_output = [
+  "vtpkg._impl.Shape.points\\s*\\n.*could be inferred differently",
+  "vtpkg._impl.Shape.scale",
+  'Symbols exported by "vtpkg": 2',
+]
+expect_no_output = ["Shape.count", "Shape.sides", "vtpkg.helper"]
+
+[[claim]]
+id = "pyright-verifytypes-complete-json"
+ref = "pyright.md"
+statement = "With attributes annotated the score is 100%, exit 0; --outputjson exposes typeCompleteness.completenessScore"
+probe = "pyright/verifytypes-complete"
+cmd = ["sh", "-c", "PYTHONPATH=$PWD pyright --verifytypes vtpkg --ignoreexternal --outputjson"]
+expect_exit = 0
+expect_output = ['"completenessScore": 1', '"withAmbiguousType": 0']
+
+[[claim]]
+id = "pyright-verifytypes-ignores-pythonpath"
+ref = "pyright.md"
+statement = "--verifytypes ignores --pythonpath and resolves through the python on PATH"
+probe = "pyright/verifytypes-pythonpath"
+cmd = ["sh", "run.sh"]
+expect_output = ["== --pythonpath\\n\\s*error: No py.typed file found", "== venv first on PATH\\n.*py.typed.*\\n.*score: 100%"]
+
+[[claim]]
+id = "basedpyright-recommended-defaults"
+ref = "pyright.md"
+statement = "basedpyright with no config reports reportAny/reportExplicitAny/reportUnknown* as warnings, ignores `# type: ignore`, and requires a rule on `# pyright: ignore`"
+probe = "pyright/basedpyright-defaults"
+cmd = ["basedpyright", "m.py"]
+expect_output = [
+  "warning: .*\\(reportAny\\)",
+  "warning: .*\\(reportExplicitAny\\)",
+  "warning: .*\\(reportIgnoreCommentWithoutRule\\)",
+  "warning: .*\\(reportUnknownMemberType\\)",
+  "m\\.py:11:9 - error: Cannot access attribute",
+]
+
+[[claim]]
+id = "basedpyright-fails-on-warnings"
+ref = "pyright.md"
+statement = "basedpyright exits 1 on warnings alone in its default mode (failOnWarnings)"
+probe = "pyright/basedpyright-fail-on-warnings"
+cmd = ["basedpyright", "m.py"]
+expect_exit = 1
+expect_output = ["0 errors, 3 warnings"]
+
+[[claim]]
+id = "basedpyright-standard-mode-quiet"
+ref = "pyright.md"
+statement = "basedpyright with typeCheckingMode standard drops the Any warnings and exits 0"
+probe = "pyright/basedpyright-fail-on-warnings"
+cmd = ["basedpyright", "-p", "std.json", "m.py"]
+expect_exit = 0
+
+[[claim]]
+id = "basedpyright-baseline"
+ref = "pyright.md"
+statement = "basedpyright --writebaseline records current diagnostics in .basedpyright/baseline.json; later runs only report new ones"
+probe = "pyright/basedpyright-baseline"
+cmd = ["sh", "-c", "basedpyright --writebaseline m.py >/dev/null; ls .basedpyright; basedpyright m.py"]
+expect_exit = 0
+expect_output = ["baseline.json", "0 errors, 0 warnings"]
+
+
+[probes."pyright/standard-vs-basic"]
+"basic.json" = '''
+{"typeCheckingMode": "basic"}
+'''
+"m.py" = '''
+from typing import overload
+
+
+class A:
+    x: int = 0
+
+    def f(self, x: int) -> int:
+        return x
+
+
+class B(A):
+    x: str = ""  # incompatible variable override
+
+    def f(self, x: str) -> int:  # incompatible method override
+        return 0
+
+
+def g() -> None: ...
+
+
+print(g.missing)  # function member access
+
+
+@overload
+def h(x: int) -> int: ...
+@overload
+def h(x: int) -> str: ...
+def h(x: int) -> int | str:
+    return x
+
+
+def k(flag: bool) -> int:
+    if flag:
+        y = 1
+    return y
+'''
+"pyrightconfig.json" = '''
+{}
+'''
+
+[probes."pyright/strict-only"]
+"m.py" = '''
+# pyright: strict
+import os
+from typing import Any
+from warnings import deprecated
+
+
+def untyped(x, y=1):
+    return x
+
+
+def raw(items: list) -> dict:
+    return {}
+
+
+class C:
+    _secret = 1
+
+
+print(C._secret)
+
+
+def check(x: int) -> None:
+    if isinstance(x, int):
+        pass
+
+
+def explicit(x: Any) -> Any:
+    return x.anything
+
+
+@deprecated("use new")
+def old() -> None: ...
+
+
+old()
+
+
+def deco(f):
+    return f
+
+
+@deco
+def decorated() -> None: ...
+
+
+def matcher(x: int | str) -> None:
+    match x:
+        case int():
+            pass
+
+
+def caster(x: int) -> int:
+    from typing import cast
+
+    return cast(int, x)
+'''
+"pyrightconfig.json" = '''
+{"pythonVersion": "3.14"}
+'''
+
+[probes."pyright/file-comment-standard"]
+"m.py" = '''
+# pyright: standard
+
+
+class A:
+    def f(self, x: int) -> int:
+        return x
+
+
+class B(A):
+    def f(self, x: str) -> int:
+        return 0
+'''
+"pyrightconfig.json" = '''
+{"typeCheckingMode": "basic"}
+'''
+
+[probes."pyright/type-ignore-blanket"]
+"m.py" = '''
+class C: ...
+
+
+a = C().missing  # type: ignore[attr-defined]
+b = C().missing  # type: ignore[no-such-code-at-all]
+c = 1  # type: ignore[attr-defined]
+d = C().missing  # pyright: ignore[reportPossiblyUnbound]
+e = C().missing  # pyright: ignore[reportAttributeAccessIssue]
+f = 2  # pyright: ignore[reportAttributeAccessIssue]
+'''
+"no-type-ignore.json" = '''
+{"reportUnnecessaryTypeIgnoreComment": "error", "enableTypeIgnoreComments": false}
+'''
+"pyrightconfig.json" = '''
+{"reportUnnecessaryTypeIgnoreComment": "error"}
+'''
+
+[probes."pyright/return-inference"]
+"m.py" = '''
+from typing import assert_type
+
+
+class X: ...
+
+
+def make():
+    return X()
+
+
+def ident(x):
+    return x
+
+
+def test(n: int, s: str) -> None:
+    assert_type(make(), X)
+    assert_type(ident(n), int)
+    assert_type(ident(s), str)
+'''
+"pyrightconfig.json" = '''
+{"pythonVersion": "3.14"}
+'''
+
+[probes."pyright/untyped-body-checked"]
+"m.py" = '''
+from typing import assert_type
+
+
+def test_x():
+    n: int = "s"
+    assert_type(len("ab"), str)
+'''
+"pyrightconfig.json" = '''
+{}
+'''
+
+[probes."pyright/outputjson-zero-based"]
+"m.py" = '''
+x: int = 1
+
+y: str = x
+'''
+"pyrightconfig.json" = '''
+{}
+'''
+
+[probes."pyright/exit-codes"]
+"bad.json" = '''
+{"reportUnusedImport": "warning"} x
+'''
+"m.py" = '''
+import os
+'''
+"pyrightconfig.json" = '''
+{"reportUnusedImport": "warning"}
+'''
+
+[probes."pyright/config-precedence"]
+"m.py" = '''
+def f(x):
+    return x
+'''
+"pyproject.toml" = '''
+[project]
+name = "demo"
+version = "0"
+
+[tool.pyright]
+typeCheckingMode = "strict"
+'''
+"pyrightconfig.json" = '''
+{}
+'''
+
+[probes."pyright/python-version-imports"]
+"m.py" = '''
+from typing import assert_type, reveal_type
+from typing_extensions import assert_type as ok
+
+ok(1, int)
+'''
+"pyrightconfig.json" = '''
+{"pythonVersion": "3.10"}
+'''
+
+[probes."pyright/deprecated-standard"]
+"m.py" = '''
+from typing_extensions import deprecated
+
+
+@deprecated("use new()")
+def old() -> None: ...
+
+
+old()
+'''
+"pyrightconfig.json" = '''
+{}
+'''
+"strict-dep.json" = '''
+{"reportDeprecated": "error"}
+'''
+
+[probes."pyright/rule-map"]
+"m.py" = '''
+import json
+import not_a_real_module
+
+
+class C:
+    x: int = 0
+
+    def m(self) -> int:
+        return 1
+
+    def needs_cls(cls: type["C"]) -> None: ...
+
+
+def f(a: int) -> str:
+    return a
+
+
+def g(opt: C | None, n: int, fn: object) -> None:
+    opt.x
+    C().missing
+    json.nope
+    f("s")
+    f(1, 2)
+    n[0]
+    n + "s"
+    v: str = n
+    opt[0]
+    for _ in n:
+        pass
+    n()
+    del fn
+
+
+def g(x: int) -> None: ...
+
+
+def func() -> None: ...
+
+
+func.attr = 1
+print(func.other)
+'''
+"pyrightconfig.json" = '''
+{}
+'''
+
+[probes."pyright/execution-environments"]
+"pyrightconfig.json" = '''
+{
+  "executionEnvironments": [
+    {"root": "scripts", "reportMissingImports": "none", "pythonVersion": "3.10"},
+    {"root": "src"}
+  ]
+}
+'''
+"scripts/a.py" = '''
+import not_installed_pkg
+'''
+"src/a.py" = '''
+import not_installed_pkg
+'''
+
+[probes."pyright/verifytypes-local"]
+"pyrightconfig.json" = '''
+{}
+'''
+"vtpkg/__init__.py" = '''
+from ._impl import Shape, helper
+from ._impl import area as area
+
+__all__ = ["Shape"]
+'''
+"vtpkg/_impl.py" = '''
+class Shape:
+    sides = 4
+    label = "shape"
+
+    def __init__(self, points: list[float]) -> None:
+        self.points = list(points)
+        self.count = 0
+        self.scale = float(len(points))
+
+
+def area(s: Shape) -> float:
+    return 0.0
+
+
+def helper(x):
+    return x
+'''
+"vtpkg/py.typed" = ""
+
+[probes."pyright/verifytypes-complete"]
+"pyrightconfig.json" = '''
+{}
+'''
+"vtpkg/__init__.py" = '''
+from ._impl import Shape, helper
+from ._impl import area as area
+
+__all__ = ["Shape"]
+'''
+"vtpkg/_impl.py" = '''
+class Shape:
+    sides = 4
+    label = "shape"
+
+    def __init__(self, points: list[float]) -> None:
+        self.points: list[float] = list(points)
+        self.count = 0
+        self.scale: float = float(len(points))
+
+
+def area(s: Shape) -> float:
+    return 0.0
+
+
+def helper(x):
+    return x
+'''
+"vtpkg/py.typed" = ""
+
+[probes."pyright/verifytypes-pythonpath"]
+"pyrightconfig.json" = '''
+{}
+'''
+"run.sh" = '''
+set -e
+python -m venv --without-pip .v
+echo "$PWD" > "$(.v/bin/python -c 'import sysconfig; print(sysconfig.get_path("purelib"))')/vt.pth"
+echo "== --pythonpath"
+pyright --pythonpath .v/bin/python --verifytypes vtpkg --ignoreexternal | grep -E "py.typed|score" || true
+echo "== venv first on PATH"
+PATH="$PWD/.v/bin:$PATH" pyright --verifytypes vtpkg --ignoreexternal | grep -E "py.typed|score" || true
+'''
+"vtpkg/__init__.py" = '''
+from ._impl import Shape, helper
+from ._impl import area as area
+
+__all__ = ["Shape"]
+'''
+"vtpkg/_impl.py" = '''
+class Shape:
+    sides = 4
+    label = "shape"
+
+    def __init__(self, points: list[float]) -> None:
+        self.points: list[float] = list(points)
+        self.count = 0
+        self.scale: float = float(len(points))
+
+
+def area(s: Shape) -> float:
+    return 0.0
+
+
+def helper(x):
+    return x
+'''
+"vtpkg/py.typed" = ""
+
+[probes."pyright/basedpyright-defaults"]
+"m.py" = '''
+from typing import Any
+
+
+class C: ...
+
+
+def f(x: Any) -> int:
+    return x
+
+
+a = C().missing  # type: ignore[attr-defined]
+b = C().missing  # pyright: ignore
+c = C().missing  # pyright: ignore[reportAttributeAccessIssue]
+'''
+"pyrightconfig.json" = '''
+{}
+'''
+
+[probes."pyright/basedpyright-fail-on-warnings"]
+"m.py" = '''
+from typing import Any
+
+
+def f(x: Any) -> None:
+    print(x)
+'''
+"pyrightconfig.json" = '''
+{}
+'''
+"std.json" = '''
+{"typeCheckingMode": "standard"}
+'''
+
+[probes."pyright/basedpyright-baseline"]
+"m.py" = '''
+class C: ...
+
+
+x = C().missing
+'''
+"pyrightconfig.json" = '''
+{}
+'''

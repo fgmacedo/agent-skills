@@ -15,3 +15,6 @@ Thumbs.db
 
 # Node (skills CLI may create these)
 node_modules/
+
+# Claims
+claims/**/.venv/

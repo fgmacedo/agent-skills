@@ -1,0 +1,538 @@
+# ty 0.0.86 claims backing skills/python-typing/references/ty.md
+
+[[claim]]
+id = "ty-unannotated-return-unknown"
+ref = "ty.md"
+statement = "ty does not infer return types of unannotated functions: calls are Unknown"
+probe = "ty/ty-unannotated-return-unknown"
+cmd = ["ty", "check", "--output-format", "concise", "p.py"]
+expect_output = ["p\\.py:9:.*Revealed type: `Unknown`", "p\\.py:10:.*Revealed type: `Unknown`"]
+
+[[claim]]
+id = "ty-coded-type-ignore-ignored"
+ref = "ty.md"
+statement = "ty ignores `# type: ignore[code]` without a ty: code: no suppression, never reported unused"
+probe = "ty/ty-coded-type-ignore-ignored"
+cmd = ["ty", "check", "--output-format", "concise", "p.py"]
+expect_exit = 1
+expect_output = ["p\\.py:3:\\d+: error\\[unresolved-attribute\\]", "p\\.py:5:\\d+: error\\[unresolved-attribute\\]"]
+expect_no_output = ["p\\.py:4:"]
+
+[[claim]]
+id = "ty-bare-type-ignore"
+ref = "ty.md"
+statement = "ty honors bare `# type: ignore` and reports an unused one as unused-type-ignore-comment (warning)"
+probe = "ty/ty-bare-type-ignore"
+cmd = ["ty", "check", "--output-format", "concise", "p.py"]
+expect_no_output = ["p\\.py:3:"]
+expect_output = ["p\\.py:4:\\d+: warning\\[unused-type-ignore-comment\\]"]
+
+[[claim]]
+id = "ty-type-ignore-ty-prefix"
+ref = "ty.md"
+statement = "`ty:`-prefixed codes inside `# type: ignore[...]` suppress ty rules; unused ones are reported"
+probe = "ty/ty-type-ignore-ty-prefix"
+cmd = ["ty", "check", "--output-format", "concise", "p.py"]
+expect_no_output = ["p\\.py:3:", "p\\.py:4:"]
+expect_output = ["p\\.py:5:\\d+: warning\\[unused-type-ignore-comment\\]"]
+
+[[claim]]
+id = "ty-pyright-ignore-ignored"
+ref = "ty.md"
+statement = "ty does not honor `# pyright: ignore`; chaining `# ty: ignore[...]` on the same line works"
+probe = "ty/ty-pyright-ignore-ignored"
+cmd = ["ty", "check", "--output-format", "concise", "p.py"]
+expect_output = ["p\\.py:3:\\d+: error\\[unresolved-attribute\\]"]
+expect_no_output = ["p\\.py:4:"]
+
+[[claim]]
+id = "ty-unused-ty-ignore"
+ref = "ty.md"
+statement = "an unused `# ty: ignore` is unused-ignore-comment, a warning, and warnings alone exit 1"
+probe = "ty/ty-unused-ty-ignore"
+cmd = ["ty", "check", "--output-format", "concise", "p.py"]
+expect_exit = 1
+expect_output = ["warning\\[unused-ignore-comment\\]"]
+
+[[claim]]
+id = "ty-exit-codes"
+ref = "ty.md"
+statement = "exit codes: 1 on warnings by default, 0 with --exit-zero-on-warning, 2 on IO errors"
+probe = "ty/ty-exit-codes"
+cmd = ["sh", "-c", "ty check p.py >/dev/null; echo \"warn=$?\"; ty check --exit-zero-on-warning p.py >/dev/null; echo \"ezw=$?\"; ty check missing.py >/dev/null 2>&1; echo \"io=$?\""]
+expect_output = ["^warn=1$", "^ezw=0$", "^io=2$"]
+
+[[claim]]
+id = "ty-undefined-reveal"
+ref = "ty.md"
+statement = "`reveal_type` without import is an undefined-reveal warning, which makes ty exit 1"
+probe = "ty/ty-undefined-reveal"
+cmd = ["ty", "check", "--output-format", "concise", "p.py"]
+expect_exit = 1
+expect_output = ["warning\\[undefined-reveal\\]"]
+
+[[claim]]
+id = "ty-python-version-requires-python"
+ref = "ty.md"
+statement = "ty uses the requires-python lower bound over the venv interpreter; --python-version overrides"
+probe = "ty/ty-python-version-requires-python"
+cmd = ["sh", "-c", "uv venv -q -p 3.12 .venv >/dev/null 2>&1; ty check -v --output-format concise src 2>&1; echo ---; ty check --output-format concise --python-version 3.12 src 2>&1"]
+expect_output = ["Python version: Python 3\\.10", "error\\[unresolved-import\\] Module `typing` has no member `Self`", "---\\nAll checks passed!"]
+
+[[claim]]
+id = "ty-exclude-semantics"
+ref = "ty.md"
+statement = "--exclude adds to configured excludes; explicit paths bypass excludes unless --force-exclude"
+probe = "ty/ty-exclude-semantics"
+cmd = ["sh", "-c", "echo \"[cli]\"; ty check --output-format concise --exclude tests/; echo \"[explicit]\"; ty check --output-format concise scripts/s.py; echo \"[force]\"; ty check --output-format concise --force-exclude scripts/s.py 2>&1"]
+expect_output = ["\\[cli\\]\\nsrc/a\\.py:1:\\d+: error\\[invalid-assignment\\][^\\n]*\\nFound 1 diagnostic", "\\[explicit\\]\\nscripts/s\\.py:1:", "\\[force\\]\\n(WARN[^\\n]*\\n)?All checks passed!"]
+
+[[claim]]
+id = "ty-overrides"
+ref = "ty.md"
+statement = "[[tool.ty.overrides]] with include globs changes rule levels per path"
+probe = "ty/ty-overrides"
+cmd = ["ty", "check", "--output-format", "concise"]
+expect_output = ["src/a\\.py:2:"]
+expect_no_output = ["tests/t\\.py"]
+
+[[claim]]
+id = "ty-toml-precedence"
+ref = "ty.md"
+statement = "ty.toml beats [tool.ty] in pyproject.toml (whole section ignored, with a WARN)"
+probe = "ty/ty-toml-precedence"
+cmd = ["ty", "check", "--output-format", "concise"]
+expect_output = ["Ignoring the `tool\\.ty` section", "a\\.py:2:\\d+: warning\\[unresolved-attribute\\]"]
+
+[[claim]]
+id = "ty-respect-type-ignore-off"
+ref = "ty.md"
+statement = "analysis.respect-type-ignore-comments = false makes ty ignore every `# type: ignore`"
+probe = "ty/ty-respect-type-ignore-off"
+cmd = ["ty", "check", "--output-format", "concise", "-c", "analysis.respect-type-ignore-comments=false", "a.py"]
+expect_output = ["a\\.py:2:\\d+: error\\[unresolved-attribute\\]"]
+
+[[claim]]
+id = "ty-file-level-ignore"
+ref = "ty.md"
+statement = "an ignore comment before any code suppresses the whole file; after a docstring it does not"
+probe = "ty/ty-file-level-ignore"
+cmd = ["ty", "check", "--output-format", "concise", "top.py", "toprule.py", "late.py"]
+expect_no_output = ["top\\.py", "toprule\\.py"]
+expect_output = ["late\\.py:4:\\d+: error\\[unresolved-attribute\\]"]
+
+[[claim]]
+id = "ty-blanket-ignore-rule"
+ref = "ty.md"
+statement = "blanket-ignore-comment (off by default) flags code-less `ty: ignore`; typo codes are ignore-comment-unknown-rule warnings"
+probe = "ty/ty-blanket-ignore-rule"
+cmd = ["ty", "check", "--output-format", "concise", "--error", "blanket-ignore-comment", "a.py"]
+expect_output = ["a\\.py:2:\\d+: error\\[blanket-ignore-comment\\]", "warning\\[ignore-comment-unknown-rule\\] Unknown rule `unresolved-atribute`", "a\\.py:3:\\d+: error\\[unresolved-attribute\\]"]
+
+[[claim]]
+id = "ty-add-ignore"
+ref = "ty.md"
+statement = "--add-ignore rewrites files with `# ty: ignore[rule]` comments"
+probe = "ty/ty-add-ignore"
+cmd = ["sh", "-c", "ty check --add-ignore a.py >/dev/null 2>&1; cat a.py"]
+expect_output = ["x = C\\(\\)\\.a  # ty: ignore\\[unresolved-attribute\\]"]
+
+[[claim]]
+id = "ty-default-levels"
+ref = "ty.md"
+statement = "default levels of the rules that differ from mypy/pyright expectations"
+probe = "ty/ty-default-levels"
+cmd = ["sh", "-c", "for r in possibly-unresolved-reference possibly-missing-attribute missing-type-argument missing-override-decorator deprecated redundant-cast unused-awaitable unused-ignore-comment unused-type-ignore-comment blanket-ignore-comment invalid-method-override invalid-attribute-override; do printf \"%s=\" $r; ty explain rule $r | grep -o \"Default level: [a-z]*\" | cut -d\" \" -f3; done"]
+expect_output = ["^possibly-unresolved-reference=ignore$", "^possibly-missing-attribute=ignore$", "^missing-type-argument=ignore$", "^missing-override-decorator=ignore$", "^deprecated=warn$", "^redundant-cast=warn$", "^unused-awaitable=warn$", "^unused-ignore-comment=warn$", "^unused-type-ignore-comment=warn$", "^blanket-ignore-comment=ignore$", "^invalid-method-override=error$", "^invalid-attribute-override=error$"]
+
+[[claim]]
+id = "ty-possibly-unbound-off"
+ref = "ty.md"
+statement = "possibly-unbound names are silent by default; enable possibly-unresolved-reference"
+probe = "ty/ty-possibly-unbound-off"
+cmd = ["sh", "-c", "ty check --output-format concise a.py; echo ---; ty check --output-format concise --error possibly-unresolved-reference a.py"]
+expect_output = ["All checks passed!\\n---\\na\\.py:4:\\d+: error\\[possibly-unresolved-reference\\]"]
+
+[[claim]]
+id = "ty-float-star"
+ref = "ty.md"
+statement = "`float*` means a known real float (not int); assert_type(x, float) fails on it even when x is declared float"
+probe = "ty/ty-float-star"
+cmd = ["ty", "check", "--output-format", "concise", "a.py"]
+expect_output = ["a\\.py:4:\\d+: error\\[type-assertion-failure\\] Type `float\\*` does not match asserted type `float`", "a\\.py:6:\\d+: error\\[type-assertion-failure\\]"]
+expect_no_output = ["a\\.py:11:"]
+
+[[claim]]
+id = "ty-callable-no-name"
+ref = "ty.md"
+statement = "ty: Callable has no `__name__` (not every callable is a function)"
+probe = "ty/ty-callable-no-name"
+cmd = ["ty", "check", "--output-format", "concise", "a.py"]
+expect_output = ["error\\[unresolved-attribute\\] Object of type `\\(\\.\\.\\.\\) -> int` has no attribute `__name__`"]
+
+[[claim]]
+id = "ty-hasattr-object"
+ref = "ty.md"
+statement = "hasattr() narrowing gives the attribute type `object`"
+probe = "ty/ty-hasattr-object"
+cmd = ["ty", "check", "--output-format", "concise", "a.py"]
+expect_output = ["Revealed type: `object`"]
+
+[[claim]]
+id = "ty-string-alias"
+ref = "ty.md"
+statement = "a string assigned without TypeAlias is not an alias: invalid-type-form"
+probe = "ty/ty-string-alias"
+cmd = ["ty", "check", "--output-format", "concise", "a.py"]
+expect_output = ["a\\.py:6:\\d+: error\\[invalid-type-form\\]", "Found 1 diagnostic"]
+expect_no_output = ["a\\.py:6:2\\d: "]
+
+[[claim]]
+id = "ty-override-rules"
+ref = "ty.md"
+statement = "method overrides are invalid-method-override; attribute overrides are invalid-attribute-override"
+probe = "ty/ty-override-rules"
+cmd = ["ty", "check", "--output-format", "concise", "a.py"]
+expect_output = ["a\\.py:7:\\d+: error\\[invalid-attribute-override\\]", "a\\.py:8:\\d+: error\\[invalid-method-override\\]"]
+
+[[claim]]
+id = "ty-no-type-check"
+ref = "ty.md"
+statement = "@no_type_check skips the function body"
+probe = "ty/ty-no-type-check"
+cmd = ["ty", "check", "--output-format", "concise", "a.py"]
+expect_exit = 0
+
+[[claim]]
+id = "ty-rule-map"
+ref = "ty.md"
+statement = "equivalent rule names across mypy, pyright and ty"
+probe = "ty/ty-rule-map"
+cmd = ["sh", "-c", "mypy --no-error-summary m.py; pyright --outputjson m.py | python3 -c \"import json,sys; [print(d['range']['start']['line']+1, d['rule']) for d in json.load(sys.stdin)['generalDiagnostics']]\"; ty check --output-format concise m.py"]
+expect_output = ["m\\.py:1: error: .*\\[import-not-found\\]", "^1 reportMissingImports$", "m\\.py:1:\\d+: error\\[unresolved-import\\]", "m\\.py:7: error: .*\\[return-value\\]", "^7 reportReturnType$", "m\\.py:7:\\d+: error\\[invalid-return-type\\]", "m\\.py:10: error: .*\\[attr-defined\\]", "^10 reportAttributeAccessIssue$", "m\\.py:10:\\d+: error\\[unresolved-attribute\\]", "m\\.py:11: error: .*\\[assignment\\]", "^11 reportAttributeAccessIssue$", "m\\.py:11:\\d+: error\\[invalid-assignment\\]", "m\\.py:12: error: .*\\[arg-type\\]", "^12 reportArgumentType$", "m\\.py:12:\\d+: error\\[invalid-argument-type\\]", "m\\.py:13: error: .*\\[assignment\\]", "^13 reportAssignmentType$", "m\\.py:13:\\d+: error\\[invalid-assignment\\]"]
+[[claim]]
+id = "ty-config-keys"
+ref = "ty.md"
+statement = "the documented [tool.ty] tables are accepted; unknown rules are warnings; terminal.error-on-warning = false exits 0 on warnings"
+probe = "ty/ty-config-keys"
+cmd = ["ty", "check"]
+expect_exit = 0
+expect_output = ["warning\\[unknown-rule\\] Unknown rule `bogus-rule`"]
+expect_no_output = ["unresolved-import", "error\\["]
+
+[[claim]]
+id = "ty-config-bad-path-exit-2"
+ref = "ty.md"
+statement = "a configuration error such as a missing extra-paths directory aborts with exit 2"
+probe = "ty/ty-config-keys"
+cmd = ["sh", "-c", "rm -rf vendored; ty check"]
+expect_exit = 2
+expect_output = ["does not point to a directory"]
+
+[[claim]]
+id = "ty-mypy-sees-ty-code"
+ref = "ty.md"
+statement = "mypy with warn_unused_ignores reports the ty: code inside a shared type: ignore as unused"
+probe = "ty/ty-mypy-sees-ty-code"
+cmd = ["sh", "-c", "mypy p.py; ty check --output-format concise p.py"]
+expect_output = ["Unused \"type: ignore\\[ty:unresolved-attribute\\]\" comment", "All checks passed!"]
+
+
+[probes."ty/ty-unannotated-return-unknown"]
+"p.py" = '''
+from typing import reveal_type
+
+def f():
+    return 1
+
+def g(x: int):
+    return x
+
+reveal_type(f())
+reveal_type(g(1))
+'''
+
+[probes."ty/ty-coded-type-ignore-ignored"]
+"p.py" = '''
+class C: ...
+
+a = C().x  # type: ignore[attr-defined]
+b = 1  # type: ignore[attr-defined]
+c = C().y  # type: ignore[unresolved-attribute]
+'''
+
+[probes."ty/ty-bare-type-ignore"]
+"p.py" = '''
+class C: ...
+
+a = C().x  # type: ignore
+b = 1  # type: ignore
+'''
+
+[probes."ty/ty-type-ignore-ty-prefix"]
+"p.py" = '''
+class C: ...
+
+a = C().x  # type: ignore[attr-defined, ty:unresolved-attribute]
+b = C().y  # type: ignore[ty:unresolved-attribute]
+c = 1  # type: ignore[ty:unresolved-attribute]
+'''
+
+[probes."ty/ty-pyright-ignore-ignored"]
+"p.py" = '''
+class C: ...
+
+a = C().x  # pyright: ignore[reportAttributeAccessIssue]
+b = C().y  # pyright: ignore[reportAttributeAccessIssue]  # ty: ignore[unresolved-attribute]
+'''
+
+[probes."ty/ty-unused-ty-ignore"]
+"p.py" = '''
+x = 1  # ty: ignore[unresolved-attribute]
+'''
+
+[probes."ty/ty-exit-codes"]
+"p.py" = '''
+x = 1  # ty: ignore[unresolved-attribute]
+'''
+
+[probes."ty/ty-undefined-reveal"]
+"p.py" = '''
+reveal_type(1)
+'''
+
+[probes."ty/ty-python-version-requires-python"]
+"pyproject.toml" = '''
+[project]
+name = "probe"
+version = "0"
+requires-python = ">=3.10"
+'''
+"src/m.py" = '''
+from typing import Self
+'''
+
+[probes."ty/ty-exclude-semantics"]
+"pyproject.toml" = '''
+[tool.ty.src]
+exclude = ["scripts/"]
+'''
+"scripts/s.py" = '''
+x: int = "s"
+'''
+"src/a.py" = '''
+x: int = "a"
+'''
+"tests/t.py" = '''
+x: int = "t"
+'''
+
+[probes."ty/ty-overrides"]
+"pyproject.toml" = '''
+[[tool.ty.overrides]]
+include = ["tests/**"]
+
+[tool.ty.overrides.rules]
+unresolved-attribute = "ignore"
+'''
+"src/a.py" = '''
+class C: ...
+x = C().a
+'''
+"tests/t.py" = '''
+class C: ...
+x = C().a
+'''
+
+[probes."ty/ty-toml-precedence"]
+"a.py" = '''
+class C: ...
+x = C().a
+'''
+"pyproject.toml" = '''
+[tool.ty.rules]
+unresolved-attribute = "ignore"
+'''
+"ty.toml" = '''
+[rules]
+unresolved-attribute = "warn"
+'''
+
+[probes."ty/ty-respect-type-ignore-off"]
+"a.py" = '''
+class C: ...
+x = C().a  # type: ignore
+'''
+
+[probes."ty/ty-file-level-ignore"]
+"late.py" = '''
+"""Doc."""
+# type: ignore
+class C: ...
+x = C().a
+'''
+"top.py" = '''
+# type: ignore
+class C: ...
+x = C().a
+'''
+"toprule.py" = '''
+# ty: ignore[unresolved-attribute]
+class C: ...
+x = C().a
+'''
+
+[probes."ty/ty-blanket-ignore-rule"]
+"a.py" = '''
+class C: ...
+x = C().a  # ty: ignore
+y = C().b  # ty: ignore[unresolved-atribute]
+'''
+
+[probes."ty/ty-add-ignore"]
+"a.py" = '''
+class C: ...
+x = C().a
+'''
+
+[probes."ty/ty-default-levels"]
+".keep" = ""
+
+[probes."ty/ty-possibly-unbound-off"]
+"a.py" = '''
+def last(items: list[int]) -> int:
+    for i in items:
+        value = i
+    return value
+'''
+
+[probes."ty/ty-float-star"]
+"a.py" = '''
+from typing import assert_type
+
+RATE = 1.5
+assert_type(RATE, float)
+RATIO: float = 1.5
+assert_type(RATIO, float)
+
+def rate() -> float:
+    return 1.5
+
+assert_type(rate(), float)
+'''
+
+[probes."ty/ty-callable-no-name"]
+"a.py" = '''
+from collections.abc import Callable
+
+def name_of(c: Callable[..., int]) -> str:
+    return c.__name__
+'''
+
+[probes."ty/ty-hasattr-object"]
+"a.py" = '''
+from typing import reveal_type
+
+def f(o: object) -> None:
+    if hasattr(o, "tag"):
+        reveal_type(o.tag)
+'''
+
+[probes."ty/ty-string-alias"]
+"a.py" = '''
+from typing import TypeAlias
+
+Bad = "int | str"
+Good: TypeAlias = "int | str"
+
+def f(x: Bad, y: Good) -> None: ...
+'''
+
+[probes."ty/ty-override-rules"]
+"a.py" = '''
+class Base:
+    attr: int = 0
+    def m(self, x: int) -> int:
+        return x
+
+class Sub(Base):
+    attr: str = ""
+    def m(self, x: str) -> int:
+        return 0
+'''
+
+[probes."ty/ty-no-type-check"]
+"a.py" = '''
+from typing import no_type_check
+
+class C: ...
+
+@no_type_check
+def f() -> int:
+    return C().x
+'''
+
+[probes."ty/ty-rule-map"]
+"m.py" = '''
+import nosuchmod
+
+class C:
+    a: int = 0
+
+def f(x: int) -> str:
+    return x
+
+c = C()
+c.missing
+c.a = "s"
+f("s")
+y: int = "s"
+'''
+
+[probes."ty/ty-config-keys"]
+"pyproject.toml" = '''
+[project]
+name = "probe"
+version = "0"
+requires-python = ">=3.10"
+
+[tool.ty.environment]
+python-version = "3.12"
+extra-paths = ["vendored"]
+
+[tool.ty.src]
+include = ["src"]
+exclude = ["src/skip/"]
+
+[tool.ty.rules]
+possibly-unresolved-reference = "error"
+bogus-rule = "error"
+
+[tool.ty.analysis]
+respect-type-ignore-comments = true
+
+[tool.ty.terminal]
+output-format = "concise"
+error-on-warning = false
+
+[[tool.ty.overrides]]
+include = ["src/legacy/**"]
+
+[tool.ty.overrides.rules]
+unresolved-attribute = "ignore"
+'''
+"src/m.py" = '''
+from typing import Self
+'''
+"vendored/.keep" = ""
+
+[probes."ty/ty-mypy-sees-ty-code"]
+"mypy.ini" = '''
+[mypy]
+warn_unused_ignores = True
+'''
+"p.py" = '''
+class C: ...
+
+a = C().x  # type: ignore[attr-defined, ty:unresolved-attribute]
+'''

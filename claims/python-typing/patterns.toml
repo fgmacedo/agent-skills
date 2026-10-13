@@ -1,0 +1,1418 @@
+[[claim]]
+id = "patterns-annotated-local-no-any-return"
+ref = "patterns.md"
+statement = "Returning an Any-typed call (json.loads) from a typed function is no-any-return under mypy --strict; binding it to an annotated local fixes it without runtime validation."
+probe = "patterns/annotated-local-no-any-return"
+cmd = ["sh", "-c", "mypy p.py; pyright p.py; ty check --output-format concise p.py"]
+expect_output = ["^p\\.py:6: error", "Found 1 errors? in 1 file", "(^|\\n)\\s*0 errors?, ", "All checks passed!"]
+
+[[claim]]
+id = "patterns-callable-name-on-callable"
+ref = "patterns.md"
+statement = "ty rejects __name__ on a plain Callable (not every callable is a function); mypy and pyright accept it."
+probe = "patterns/callable-name-on-callable"
+cmd = ["sh", "-c", "mypy p.py; pyright p.py; ty check --output-format concise p.py"]
+expect_output = ["^p\\.py:6:\\d+: (error|warning)", "Success: no issues found", "(^|\\n)\\s*0 errors?, ", "Found 1 diagnostics?"]
+
+[[claim]]
+id = "patterns-callable-with-attributes"
+ref = "patterns.md"
+statement = "A Protocol with __call__, __name__ and attribute declarations, built by one helper with a single cast, types function objects that carry attributes in all three checkers."
+probe = "patterns/callable-with-attributes"
+cmd = ["sh", "-c", "mypy p.py; pyright p.py; ty check --output-format concise p.py"]
+expect_output = ["^p\\.py:34: error", "^p\\.py:35: error", "p\\.py:34:\\d+ - error", "p\\.py:35:\\d+ - error", "^p\\.py:34:\\d+: (error|warning)", "^p\\.py:35:\\d+: (error|warning)", "Found 2 errors? in 1 file", "(^|\\n)\\s*2 errors?, ", "Found 2 diagnostics?"]
+
+[[claim]]
+id = "patterns-classmethod-cls-annotation"
+ref = "patterns.md"
+statement = "A plain def in a class body cannot annotate its first parameter as type[C] (it is bound as self); mypy and pyright reject it, ty 0.0.86 accepts it."
+probe = "patterns/classmethod-cls-annotation"
+cmd = ["sh", "-c", "mypy p.py; pyright p.py; ty check --output-format concise p.py"]
+expect_output = ["^p\\.py:6: error", "p\\.py:6:\\d+ - error", "Found 1 errors? in 1 file", "(^|\\n)\\s*1 errors?, ", "All checks passed!"]
+
+[[claim]]
+id = "patterns-dataclass-transform-class-specifier"
+ref = "patterns.md"
+statement = "With a field specifier class whose default parameter has a default value, ty 0.0.86 treats every field as optional (missing required fields are not reported); mypy and pyright report them, and mypy rejects the assignment because the class instance is not the field type."
+probe = "patterns/dataclass-transform-class-specifier"
+cmd = ["sh", "-c", "mypy p.py; pyright p.py; ty check --output-format concise p.py"]
+expect_output = ["^p\\.py:21: error", "^p\\.py:24: error", "p\\.py:21:\\d+ - error", "p\\.py:24:\\d+ - error", "^p\\.py:21:\\d+: (error|warning)", "Found 2 errors? in 1 file", "(^|\\n)\\s*2 errors?, ", "Found 1 diagnostics?"]
+
+[[claim]]
+id = "patterns-dataclass-transform-field-function"
+ref = "patterns.md"
+statement = "For a metaclass ORM, dataclass_transform(kw_only_default=True, field_specifiers=(Field,)) with an overloaded Field function under TYPE_CHECKING (default given -> T, otherwise Any) checks constructor names, required fields, keyword-only calls and attribute types in all three checkers."
+probe = "patterns/dataclass-transform-field-function"
+cmd = ["sh", "-c", "mypy p.py; pyright p.py; ty check --output-format concise p.py; python p.py && echo EXTRA-OK"]
+expect_output = ["^p\\.py:49: error", "^p\\.py:50: error", "^p\\.py:51: error", "^p\\.py:52: error", "^p\\.py:53: error", "p\\.py:49:\\d+ - error", "p\\.py:50:\\d+ - error", "p\\.py:51:\\d+ - error", "p\\.py:52:\\d+ - error", "p\\.py:53:\\d+ - error", "^p\\.py:49:\\d+: (error|warning)", "^p\\.py:50:\\d+: (error|warning)", "^p\\.py:51:\\d+: (error|warning)", "^p\\.py:52:\\d+: (error|warning)", "^p\\.py:53:\\d+: (error|warning)", "Found 5 errors? in 1 file", "(^|\\n)\\s*6 errors?, ", "Found 7 diagnostics?", "EXTRA-OK"]
+
+[[claim]]
+id = "patterns-dataclass-transform-metaclass-call"
+ref = "patterns.md"
+statement = "A metaclass __call__ annotated to return Any replaces the dataclass_transform constructor in pyright and ty (instances become Any, keyword checks vanish); mypy ignores metaclass __call__ and keeps checking."
+probe = "patterns/dataclass-transform-metaclass-call"
+cmd = ["sh", "-c", "mypy p.py; pyright p.py; ty check --output-format concise p.py"]
+expect_output = ["^p\\.py:50: error", "^p\\.py:51: error", "^p\\.py:52: error", "^p\\.py:53: error", "^p\\.py:54: error", "p\\.py:47:\\d+ - error", "p\\.py:48:\\d+ - error", "p\\.py:52:\\d+ - error", "^p\\.py:47:\\d+: (error|warning)", "^p\\.py:48:\\d+: (error|warning)", "^p\\.py:52:\\d+: (error|warning)", "Found 5 errors? in 1 file", "(^|\\n)\\s*3 errors?, ", "Found 3 diagnostics?"]
+
+[[claim]]
+id = "patterns-decorator-and-callable"
+ref = "patterns.md"
+statement = "An object that is both a decorator and a callable needs a __call__ overload with a positional-only callable parameter returning it unchanged, plus a call-form overload; decorator methods typed (f: F) -> F keep signatures."
+probe = "patterns/decorator-and-callable"
+cmd = ["sh", "-c", "mypy p.py; pyright p.py; ty check --output-format concise p.py"]
+expect_output = ["^p\\.py:48: error", "^p\\.py:49: error", "p\\.py:48:\\d+ - error", "p\\.py:49:\\d+ - error", "^p\\.py:48:\\d+: (error|warning)", "^p\\.py:49:\\d+: (error|warning)", "Found 2 errors? in 1 file", "(^|\\n)\\s*2 errors?, ", "Found 2 diagnostics?"]
+
+[[claim]]
+id = "patterns-deprecated-defaults"
+ref = "patterns.md"
+statement = "PEP 702 @deprecated usage is not reported by default by mypy --strict or pyright standard; ty reports it as a warning by default."
+probe = "patterns/deprecated-defaults"
+cmd = ["sh", "-c", "mypy p.py; pyright p.py; ty check --output-format concise p.py"]
+expect_output = ["^p\\.py:10:\\d+: (error|warning)", "Success: no issues found", "(^|\\n)\\s*0 errors?, ", "Found 1 diagnostics?"]
+
+[[claim]]
+id = "patterns-deprecated-enabled"
+ref = "patterns.md"
+statement = "Enable @deprecated reports with mypy enable_error_code = [\"deprecated\"] and pyright reportDeprecated = \"error\"; ty's deprecated rule is a warning unless raised to error."
+probe = "patterns/deprecated-enabled"
+cmd = ["sh", "-c", "mypy p.py; pyright p.py; ty check --output-format concise p.py"]
+expect_output = ["^p\\.py:10: error", "p\\.py:10:\\d+ - error", "^p\\.py:10:\\d+: (error|warning)", "Found 1 errors? in 1 file", "(^|\\n)\\s*1 errors?, ", "Found 1 diagnostics?"]
+
+[[claim]]
+id = "patterns-descriptor-get-overloads"
+ref = "patterns.md"
+statement = "A descriptor with __get__ overloads (None -> descriptor, owner instance -> value, object fallback) types class access, instance access and unrelated class attributes correctly in mypy, pyright and ty."
+probe = "patterns/descriptor-get-overloads"
+cmd = ["sh", "-c", "mypy p.py; pyright p.py; ty check --output-format concise p.py"]
+expect_output = ["^p\\.py:33: error", "p\\.py:33:\\d+ - error", "^p\\.py:33:\\d+: (error|warning)", "Found 1 errors? in 1 file", "(^|\\n)\\s*1 errors?, ", "Found 1 diagnostics?"]
+
+[[claim]]
+id = "patterns-descriptor-leakage"
+ref = "patterns.md"
+statement = "Without a fallback overload, giving a type __get__ turns every class attribute annotated with that type, in any class, into the __get__ result."
+probe = "patterns/descriptor-leakage"
+cmd = ["sh", "-c", "mypy p.py; pyright p.py; ty check --output-format concise p.py"]
+expect_output = ["Success: no issues found", "(^|\\n)\\s*0 errors?, ", "All checks passed!"]
+
+[[claim]]
+id = "patterns-descriptor-type-checking-only"
+ref = "patterns.md"
+statement = "A __get__ declared only under TYPE_CHECKING gives class-body objects a different static type on the class and on instances without changing runtime behavior."
+probe = "patterns/descriptor-type-checking-only"
+cmd = ["sh", "-c", "mypy p.py; pyright p.py; ty check --output-format concise p.py"]
+expect_output = ["^p\\.py:55: error", "p\\.py:55:\\d+ - error", "^p\\.py:55:\\d+: (error|warning)", "Found 1 errors? in 1 file", "(^|\\n)\\s*1 errors?, ", "Found 1 diagnostics?"]
+
+[[claim]]
+id = "patterns-descriptor-wrapping-function"
+ref = "patterns.md"
+statement = "A cached class-level factory is typed by a module-level implementation taking cls: type[C] plus a descriptor whose __get__(instance: object, owner: type[C]) returns a bound object exposing the extra methods."
+probe = "patterns/descriptor-wrapping-function"
+cmd = ["sh", "-c", "mypy p.py; pyright p.py; ty check --output-format concise p.py"]
+expect_output = ["^p\\.py:48: error", "^p\\.py:49: error", "p\\.py:48:\\d+ - error", "p\\.py:49:\\d+ - error", "^p\\.py:48:\\d+: (error|warning)", "^p\\.py:49:\\d+: (error|warning)", "Found 2 errors? in 1 file", "(^|\\n)\\s*2 errors?, ", "Found 2 diagnostics?"]
+
+[[claim]]
+id = "patterns-generic-default-no-runtime-dep"
+ref = "patterns.md"
+statement = "A PEP 696 default declared with typing_extensions.TypeVar under TYPE_CHECKING (plain TypeVar at runtime) lets a subclass add the parameter while bare uses stay valid under mypy --strict (disallow_any_generics), pyright and ty."
+probe = "patterns/generic-default-no-runtime-dep"
+cmd = ["sh", "-c", "mypy p.py; pyright p.py; ty check --output-format concise p.py; python p.py && echo EXTRA-OK"]
+expect_output = ["^p\\.py:43: error", "p\\.py:43:\\d+ - error", "^p\\.py:43:\\d+: (error|warning)", "Found 1 errors? in 1 file", "(^|\\n)\\s*1 errors?, ", "Found 1 diagnostics?", "EXTRA-OK"]
+
+[[claim]]
+id = "patterns-metaclass-returns-instance"
+ref = "patterns.md"
+statement = "When a metaclass turns a class statement into an instance, properties declared on the metaclass under TYPE_CHECKING give the class object the instance API in all three checkers."
+probe = "patterns/metaclass-returns-instance"
+cmd = ["sh", "-c", "mypy p.py; pyright p.py; ty check --output-format concise p.py"]
+expect_output = ["^p\\.py:42: error", "^p\\.py:43: error", "p\\.py:42:\\d+ - error", "p\\.py:43:\\d+ - error", "^p\\.py:42:\\d+: (error|warning)", "^p\\.py:43:\\d+: (error|warning)", "Found 2 errors? in 1 file", "(^|\\n)\\s*2 errors?, ", "Found 2 diagnostics?"]
+
+[[claim]]
+id = "patterns-mixin-injected-attribute"
+ref = "patterns.md"
+statement = "A Generic mixin that declares the attribute it injects at runtime gives subclasses a precise type for it, and typos still error, in all three checkers."
+probe = "patterns/mixin-injected-attribute"
+cmd = ["sh", "-c", "mypy p.py; pyright p.py; ty check --output-format concise p.py"]
+expect_output = ["^p\\.py:39: error", "p\\.py:39:\\d+ - error", "^p\\.py:39:\\d+: (error|warning)", "Found 1 errors? in 1 file", "(^|\\n)\\s*1 errors?, ", "Found 1 diagnostics?"]
+
+[[claim]]
+id = "patterns-object-vs-any-param"
+ref = "patterns.md"
+statement = "A parameter typed object accepts any argument but keeps the body checked; Any disables checking of every use."
+probe = "patterns/object-vs-any-param"
+cmd = ["sh", "-c", "mypy p.py; pyright p.py; ty check --output-format concise p.py"]
+expect_output = ["^p\\.py:8: error", "p\\.py:8:\\d+ - error", "^p\\.py:8:\\d+: (error|warning)", "Found 1 errors? in 1 file", "(^|\\n)\\s*1 errors?, ", "Found 1 diagnostics?"]
+
+[[claim]]
+id = "patterns-overload-pitfalls"
+ref = "patterns.md"
+statement = "Overload checks: an implementation that cannot accept every overload is an error in all three checkers (ty reports it on the overload); an earlier broader overload that hides a later one, and overlapping overloads with incompatible returns, are flagged by mypy and pyright but not by ty 0.0.86."
+probe = "patterns/overload-pitfalls"
+cmd = ["sh", "-c", "mypy p.py; pyright p.py; ty check --output-format concise p.py"]
+expect_output = ["^p\\.py:11: error", "^p\\.py:18: error", "^p\\.py:24: error", "p\\.py:11:\\d+ - error", "p\\.py:18:\\d+ - error", "p\\.py:24:\\d+ - error", "^p\\.py:10:\\d+: (error|warning)", "Found 3 errors? in 1 file", "(^|\\n)\\s*3 errors?, ", "Found 1 diagnostics?"]
+
+[[claim]]
+id = "patterns-paramspec-dual-decorator"
+ref = "patterns.md"
+statement = "A retry decorator usable as @retry and @retry(times=...) on sync and async functions keeps exact signatures with two overloads, a typed implementation, an async helper over Callable[P, Awaitable[R]] and one cast."
+probe = "patterns/paramspec-dual-decorator"
+cmd = ["sh", "-c", "mypy p.py; pyright p.py; ty check --output-format concise p.py"]
+expect_output = ["^p\\.py:69: error", "^p\\.py:74: error", "p\\.py:69:\\d+ - error", "p\\.py:74:\\d+ - error", "^p\\.py:69:\\d+: (error|warning)", "^p\\.py:74:\\d+: (error|warning)", "Found 2 errors? in 1 file", "(^|\\n)\\s*2 errors?, ", "Found 2 diagnostics?"]
+
+[[claim]]
+id = "patterns-typealias-string-forward-ref"
+ref = "patterns.md"
+statement = "A string-valued alias needs an explicit TypeAlias annotation; without it the assignment is a plain str variable and using it as a type errors in all three checkers."
+probe = "patterns/typealias-string-forward-ref"
+cmd = ["sh", "-c", "mypy p.py; pyright p.py; ty check --output-format concise p.py"]
+expect_output = ["^p\\.py:16: error", "p\\.py:16:\\d+ - error", "^p\\.py:16:\\d+: (error|warning)", "Found 1 errors? in 1 file", "(^|\\n)\\s*1 errors?, ", "Found 1 diagnostics?"]
+
+[[claim]]
+id = "patterns-typeddict-closed"
+ref = "patterns.md"
+statement = "PEP 728 closed=True (typing_extensions) rejects unknown keys in mypy, pyright and ty; extra_items is supported by pyright and ty; mypy 2.4 rejects the extra_items keyword and treats the class as closed."
+probe = "patterns/typeddict-closed"
+cmd = ["sh", "-c", "mypy p.py; pyright p.py; ty check --output-format concise p.py"]
+expect_output = ["^p\\.py:11: error", "^p\\.py:16: error", "^p\\.py:17: error", "^p\\.py:18: error", "p\\.py:16:\\d+ - error", "p\\.py:18:\\d+ - error", "^p\\.py:16:\\d+: (error|warning)", "^p\\.py:18:\\d+: (error|warning)", "Found 4 errors? in 1 file", "(^|\\n)\\s*2 errors?, ", "Found 2 diagnostics?"]
+
+[[claim]]
+id = "patterns-typeddict-discriminated-union"
+ref = "patterns.md"
+statement = "TypedDict unions narrow on a Literal discriminator key, NotRequired keys must be read with .get, and ReadOnly keys reject assignment, in all three checkers."
+probe = "patterns/typeddict-discriminated-union"
+cmd = ["sh", "-c", "mypy p.py; pyright p.py; ty check --output-format concise p.py"]
+expect_output = ["^p\\.py:36: error", "^p\\.py:40: error", "p\\.py:36:\\d+ - error", "p\\.py:40:\\d+ - error", "^p\\.py:36:\\d+: (error|warning)", "^p\\.py:40:\\d+: (error|warning)", "Found 2 errors? in 1 file", "(^|\\n)\\s*2 errors?, ", "Found 2 diagnostics?"]
+
+[[claim]]
+id = "patterns-typeis-vs-typeguard"
+ref = "patterns.md"
+statement = "TypeIs narrows both branches and requires the narrowed type to be consistent with the input; TypeGuard narrows only the positive branch."
+probe = "patterns/typeis-vs-typeguard"
+cmd = ["sh", "-c", "mypy p.py; pyright p.py; ty check --output-format concise p.py"]
+expect_output = ["^p\\.py:24: error", "p\\.py:24:\\d+ - error", "^p\\.py:24:\\d+: (error|warning)", "Found 1 errors? in 1 file", "(^|\\n)\\s*1 errors?, ", "Found 1 diagnostics?"]
+
+[[claim]]
+id = "patterns-variance-pep695"
+ref = "patterns.md"
+statement = "PEP 695 type parameters infer variance from use: read-only use is covariant, parameter-only use is contravariant, a mutable attribute is invariant."
+probe = "patterns/variance-pep695"
+cmd = ["sh", "-c", "mypy p.py; pyright p.py; ty check --output-format concise p.py"]
+expect_output = ["^p\\.py:24: error", "p\\.py:24:\\d+ - error", "^p\\.py:24:\\d+: (error|warning)", "Found 1 errors? in 1 file", "(^|\\n)\\s*1 errors?, ", "Found 1 diagnostics?"]
+
+
+[[claim]]
+id = "patterns-generic-default-to-bound"
+ref = "patterns.md"
+statement = "A bounded TypeVar whose PEP 696 default is the bound makes bare subclasses see the bound (checked, not Any) in mypy --strict, pyright and ty."
+probe = "patterns/generic-default-to-bound"
+cmd = ["sh", "-c", "mypy p.py; pyright p.py; ty check --output-format concise p.py"]
+expect_output = ["^p\\.py:40: error", "p\\.py:40:\\d+ - error", "^p\\.py:40:\\d+: error", "Found 1 error in 1 file", "(^|\\n)\\s*1 error, ", "Found 1 diagnostic"]
+
+
+[probes."patterns/annotated-local-no-any-return"]
+"p.py" = '''
+# claim: Returning an Any-typed call (json.loads) from a typed function is no-any-return under mypy --strict; binding it to an annotated local fixes it without runtime validation.
+import json
+
+
+def load(raw: str) -> dict[str, str]:
+    return json.loads(raw)  # E[mypy]
+
+
+def load_fixed(raw: str) -> dict[str, str]:
+    data: dict[str, str] = json.loads(raw)
+    return data
+'''
+"pyproject.toml" = '''
+[tool.mypy]
+python_version = "3.10"
+strict = true
+
+[tool.pyright]
+pythonVersion = "3.10"
+
+[tool.ty.environment]
+python-version = "3.10"
+'''
+
+[probes."patterns/callable-name-on-callable"]
+"p.py" = '''
+# claim: ty rejects __name__ on a plain Callable (not every callable is a function); mypy and pyright accept it.
+from collections.abc import Callable
+
+
+def describe(fn: Callable[..., object]) -> str:
+    return fn.__name__  # E[ty]
+'''
+"pyproject.toml" = '''
+[tool.mypy]
+python_version = "3.10"
+strict = true
+
+[tool.pyright]
+pythonVersion = "3.10"
+
+[tool.ty.environment]
+python-version = "3.10"
+'''
+
+[probes."patterns/callable-with-attributes"]
+"p.py" = '''
+# claim: A Protocol with __call__, __name__ and attribute declarations, built by one helper with a single cast, types function objects that carry attributes in all three checkers.
+from __future__ import annotations
+
+from collections.abc import Callable
+from typing import Protocol, TypeVar, cast
+
+from typing_extensions import ParamSpec, assert_type
+
+P = ParamSpec("P")
+R_co = TypeVar("R_co", covariant=True)
+
+
+class Tagged(Protocol[P, R_co]):
+    __name__: str
+    key: str
+
+    def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R_co: ...
+
+
+def tag(fn: Callable[P, R_co], key: str) -> Tagged[P, R_co]:
+    tagged = cast("Tagged[P, R_co]", fn)
+    tagged.key = key
+    return tagged
+
+
+def is_ready(level: int) -> bool:
+    return level > 3
+
+
+check = tag(is_ready, "ready")
+assert_type(check.key, str)
+assert_type(check.__name__, str)
+assert_type(check(4), bool)
+check("high")  # E
+check.missing  # E
+'''
+"pyproject.toml" = '''
+[tool.mypy]
+python_version = "3.10"
+strict = true
+
+[tool.pyright]
+pythonVersion = "3.10"
+
+[tool.ty.environment]
+python-version = "3.10"
+'''
+
+[probes."patterns/classmethod-cls-annotation"]
+"p.py" = '''
+# claim: A plain def in a class body cannot annotate its first parameter as type[C] (it is bound as self); mypy and pyright reject it, ty 0.0.86 accepts it.
+from __future__ import annotations
+
+
+class Adapter:
+    def build(cls: type[Adapter], key: str) -> Adapter:  # E[mypy,pyright]
+        return cls()
+'''
+"pyproject.toml" = '''
+[tool.mypy]
+python_version = "3.10"
+strict = true
+
+[tool.pyright]
+pythonVersion = "3.10"
+
+[tool.ty.environment]
+python-version = "3.10"
+'''
+
+[probes."patterns/dataclass-transform-class-specifier"]
+"p.py" = '''
+# claim: With a field specifier class whose default parameter has a default value, ty 0.0.86 treats every field as optional (missing required fields are not reported); mypy and pyright report them, and mypy rejects the assignment because the class instance is not the field type.
+from __future__ import annotations
+
+from typing import Any
+
+from typing_extensions import dataclass_transform
+
+
+class Field:
+    def __init__(self, *, default: Any = None, max_length: int | None = None) -> None:
+        self.default = default
+
+
+@dataclass_transform(kw_only_default=True, field_specifiers=(Field,))
+class Model:
+    def __init_subclass__(cls) -> None:
+        pass
+
+
+class User(Model):
+    name: str = Field(max_length=10)  # E[mypy,pyright,ty]
+
+
+User()  # E[mypy,pyright]
+'''
+"pyproject.toml" = '''
+[tool.mypy]
+python_version = "3.10"
+strict = true
+
+[tool.pyright]
+pythonVersion = "3.10"
+
+[tool.ty.environment]
+python-version = "3.10"
+'''
+
+[probes."patterns/dataclass-transform-field-function"]
+"p.py" = '''
+# claim: For a metaclass ORM, dataclass_transform(kw_only_default=True, field_specifiers=(Field,)) with an overloaded Field function under TYPE_CHECKING (default given -> T, otherwise Any) checks constructor names, required fields, keyword-only calls and attribute types in all three checkers.
+# extra: python p.py
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, TypeVar, overload
+
+from typing_extensions import assert_type, dataclass_transform
+
+T = TypeVar("T")
+
+
+class FieldInfo:
+    def __init__(self, *, default: Any = None, max_length: int | None = None) -> None:
+        self.default, self.max_length = default, max_length
+
+
+if TYPE_CHECKING:
+
+    @overload
+    def Field(*, default: T, max_length: int | None = None) -> T: ...
+    @overload
+    def Field(*, max_length: int | None = None) -> Any: ...
+    def Field(*, default: Any = None, max_length: int | None = None) -> Any: ...
+
+else:
+    Field = FieldInfo
+
+
+@dataclass_transform(kw_only_default=True, field_specifiers=(Field,))
+class ModelMeta(type):
+    pass
+
+
+class Model(metaclass=ModelMeta):
+    def __init__(self, **values: Any) -> None:
+        for key, value in values.items():
+            setattr(self, key, value)
+
+
+class User(Model):
+    name: str = Field(max_length=10)
+    age: int = Field(default=0)
+
+
+user = User(name="ada")
+assert_type(user.name, str)
+assert_type(user.age, int)
+if TYPE_CHECKING:
+    User(nam="ada")  # E
+    User(age=3)  # E
+    User("ada")  # E
+    User(name=1)  # E
+    user.age = "old"  # E
+'''
+"pyproject.toml" = '''
+[tool.mypy]
+python_version = "3.10"
+strict = true
+
+[tool.pyright]
+pythonVersion = "3.10"
+
+[tool.ty.environment]
+python-version = "3.10"
+'''
+
+[probes."patterns/dataclass-transform-metaclass-call"]
+"p.py" = '''
+# claim: A metaclass __call__ annotated to return Any replaces the dataclass_transform constructor in pyright and ty (instances become Any, keyword checks vanish); mypy ignores metaclass __call__ and keeps checking.
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, TypeVar, overload
+
+from typing_extensions import assert_type, dataclass_transform
+
+T = TypeVar("T")
+
+
+class FieldInfo:
+    def __init__(self, *, default: Any = None, max_length: int | None = None) -> None:
+        self.default, self.max_length = default, max_length
+
+
+if TYPE_CHECKING:
+
+    @overload
+    def Field(*, default: T, max_length: int | None = None) -> T: ...
+    @overload
+    def Field(*, max_length: int | None = None) -> Any: ...
+    def Field(*, default: Any = None, max_length: int | None = None) -> Any: ...
+
+else:
+    Field = FieldInfo
+
+
+@dataclass_transform(kw_only_default=True, field_specifiers=(Field,))
+class ModelMeta(type):
+    def __call__(cls, **values: Any) -> Any:
+        instance = super().__call__()
+        for key, value in values.items():
+            setattr(instance, key, value)
+        return instance
+
+
+class Model(metaclass=ModelMeta):
+    pass
+
+
+class User(Model):
+    name: str = Field(max_length=10)
+    age: int = Field(default=0)
+
+
+user = User(name="ada")
+assert_type(user.name, str)  # E[pyright,ty]
+assert_type(user.age, int)  # E[pyright,ty]
+if TYPE_CHECKING:
+    User(nam="ada")  # E[mypy]
+    User(age=3)  # E[mypy]
+    User("ada")  # E
+    User(name=1)  # E[mypy]
+    user.age = "old"  # E[mypy]
+'''
+"pyproject.toml" = '''
+[tool.mypy]
+python_version = "3.10"
+strict = true
+
+[tool.pyright]
+pythonVersion = "3.10"
+
+[tool.ty.environment]
+python-version = "3.10"
+'''
+
+[probes."patterns/decorator-and-callable"]
+"p.py" = '''
+# claim: An object that is both a decorator and a callable needs a __call__ overload with a positional-only callable parameter returning it unchanged, plus a call-form overload; decorator methods typed (f: F) -> F keep signatures.
+from __future__ import annotations
+
+from collections.abc import Callable
+from typing import Any, TypeVar, overload
+
+from typing_extensions import assert_type
+
+F = TypeVar("F", bound=Callable[..., Any])
+
+
+class Hook:
+    def __init__(self) -> None:
+        self.handlers: list[Callable[..., Any]] = []
+
+    def before(self, f: F) -> F:
+        self.handlers.append(f)
+        return f
+
+    @overload
+    def __call__(self, f: F, /) -> F: ...
+    @overload
+    def __call__(self, *args: Any, **kwargs: Any) -> Any: ...
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        if len(args) == 1 and not kwargs and callable(args[0]):
+            self.handlers.append(args[0])
+            return args[0]
+        return [h(*args, **kwargs) for h in self.handlers]
+
+
+saved = Hook()
+
+
+@saved.before
+def check(amount: int, currency: str = "USD") -> bool:
+    return amount > 0
+
+
+@saved
+def notify(code: str) -> float:
+    return 1.0
+
+
+assert_type(check(1), bool)
+assert_type(notify("x"), float)
+saved()
+saved(10, currency="BRL")
+check("ten")  # E
+notify(1)  # E
+'''
+"pyproject.toml" = '''
+[tool.mypy]
+python_version = "3.10"
+strict = true
+
+[tool.pyright]
+pythonVersion = "3.10"
+
+[tool.ty.environment]
+python-version = "3.10"
+'''
+
+[probes."patterns/deprecated-defaults"]
+"p.py" = '''
+# claim: PEP 702 @deprecated usage is not reported by default by mypy --strict or pyright standard; ty reports it as a warning by default.
+from typing_extensions import deprecated
+
+
+@deprecated("use total() instead")
+def legacy_total() -> int:
+    return 0
+
+
+legacy_total()  # E[ty]
+'''
+"pyproject.toml" = '''
+[tool.mypy]
+python_version = "3.10"
+strict = true
+
+[tool.pyright]
+pythonVersion = "3.10"
+
+[tool.ty.environment]
+python-version = "3.10"
+'''
+
+[probes."patterns/deprecated-enabled"]
+"p.py" = '''
+# claim: Enable @deprecated reports with mypy enable_error_code = ["deprecated"] and pyright reportDeprecated = "error"; ty's deprecated rule is a warning unless raised to error.
+from typing_extensions import deprecated
+
+
+@deprecated("use total() instead")
+def legacy_total() -> int:
+    return 0
+
+
+legacy_total()  # E
+'''
+"pyproject.toml" = '''
+[tool.mypy]
+python_version = "3.10"
+strict = true
+enable_error_code = ["deprecated"]
+
+[tool.pyright]
+pythonVersion = "3.10"
+reportDeprecated = "error"
+
+[tool.ty.environment]
+python-version = "3.10"
+
+[tool.ty.rules]
+deprecated = "error"
+'''
+
+[probes."patterns/descriptor-get-overloads"]
+"p.py" = '''
+# claim: A descriptor with __get__ overloads (None -> descriptor, owner instance -> value, object fallback) types class access, instance access and unrelated class attributes correctly in mypy, pyright and ty.
+from __future__ import annotations
+
+from typing import overload
+
+from typing_extensions import Self, assert_type
+
+
+class Column:
+    @overload
+    def __get__(self, instance: None, owner: type[Table]) -> Self: ...
+    @overload
+    def __get__(self, instance: Table, owner: object) -> int: ...
+    @overload
+    def __get__(self, instance: object, owner: object) -> Self: ...
+    def __get__(self, instance: object, owner: object) -> Self | int:
+        if isinstance(instance, Table):
+            return 1
+        return self
+
+
+class Table:
+    size = Column()
+
+
+class Registry:
+    default: Column | None = None
+
+
+assert_type(Table.size, Column)
+assert_type(Table().size, int)
+assert_type(Registry().default, Column | None)
+Table().size.upper()  # E
+'''
+"pyproject.toml" = '''
+[tool.mypy]
+python_version = "3.10"
+strict = true
+
+[tool.pyright]
+pythonVersion = "3.10"
+
+[tool.ty.environment]
+python-version = "3.10"
+'''
+
+[probes."patterns/descriptor-leakage"]
+"p.py" = '''
+# claim: Without a fallback overload, giving a type __get__ turns every class attribute annotated with that type, in any class, into the __get__ result.
+from __future__ import annotations
+
+from typing_extensions import assert_type
+
+
+class Column:
+    def __get__(self, instance: object, owner: object) -> int:
+        return 1
+
+
+class Registry:
+    default: Column | None = None
+
+
+assert_type(Registry().default, int | None)
+'''
+"pyproject.toml" = '''
+[tool.mypy]
+python_version = "3.10"
+strict = true
+
+[tool.pyright]
+pythonVersion = "3.10"
+
+[tool.ty.environment]
+python-version = "3.10"
+'''
+
+[probes."patterns/descriptor-type-checking-only"]
+"p.py" = '''
+# claim: A __get__ declared only under TYPE_CHECKING gives class-body objects a different static type on the class and on instances without changing runtime behavior.
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, overload
+
+from typing_extensions import Self, assert_type
+
+
+class BoundAction:
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+    def __call__(self) -> bool:
+        return True
+
+
+class Action:
+    def __init__(self, name: str = "") -> None:
+        self.name = name
+
+    if TYPE_CHECKING:
+
+        @overload
+        def __get__(self, instance: None, owner: type[Panel]) -> Self: ...
+        @overload
+        def __get__(self, instance: Panel, owner: object) -> BoundAction: ...
+        @overload
+        def __get__(self, instance: object, owner: object) -> Self: ...
+        def __get__(self, instance: object, owner: object) -> Self | BoundAction: ...
+
+
+class PanelMeta(type):
+    def __new__(mcs, name: str, bases: tuple[type, ...], ns: dict[str, Any]) -> PanelMeta:
+        for key, value in list(ns.items()):
+            if isinstance(value, Action):
+                value.name = key
+        return super().__new__(mcs, name, bases, ns)
+
+    def __call__(cls, *args: Any, **kwargs: Any) -> Any:
+        instance = super().__call__(*args, **kwargs)
+        for key, value in vars(cls).items():
+            if isinstance(value, Action):
+                setattr(instance, key, BoundAction(key))
+        return instance
+
+
+class Panel(metaclass=PanelMeta):
+    save = Action()
+
+
+assert_type(Panel.save, Action)
+panel: Panel = Panel()
+assert_type(panel.save, BoundAction)
+assert_type(panel.save(), bool)
+Panel.save()  # E
+'''
+"pyproject.toml" = '''
+[tool.mypy]
+python_version = "3.10"
+strict = true
+
+[tool.pyright]
+pythonVersion = "3.10"
+
+[tool.ty.environment]
+python-version = "3.10"
+'''
+
+[probes."patterns/descriptor-wrapping-function"]
+"p.py" = '''
+# claim: A cached class-level factory is typed by a module-level implementation taking cls: type[C] plus a descriptor whose __get__(instance: object, owner: type[C]) returns a bound object exposing the extra methods.
+from __future__ import annotations
+
+from collections.abc import Callable
+from typing import Generic, TypeVar
+
+from typing_extensions import assert_type
+
+C = TypeVar("C")
+
+
+class BoundFactory(Generic[C]):
+    def __init__(self, owner: type[C], impl: Callable[[type[C], str], C], cache: dict[str, C]) -> None:
+        self._owner, self._impl, self._cache = owner, impl, cache
+
+    def __call__(self, key: str) -> C:
+        if key not in self._cache:
+            self._cache[key] = self._impl(self._owner, key)
+        return self._cache[key]
+
+    def clear_cache(self) -> None:
+        self._cache.clear()
+
+
+class cached_factory(Generic[C]):
+    def __init__(self, impl: Callable[[type[C], str], C]) -> None:
+        self._impl = impl
+        self._cache: dict[str, C] = {}
+
+    def __get__(self, instance: object, owner: type[C]) -> BoundFactory[C]:
+        return BoundFactory(owner, self._impl, self._cache)
+
+
+def _adapter_for(cls: type[Adapter], key: str) -> Adapter:
+    return cls(key)
+
+
+class Adapter:
+    for_key = cached_factory(_adapter_for)
+
+    def __init__(self, key: str) -> None:
+        self.key = key
+
+
+assert_type(Adapter.for_key("a"), Adapter)
+assert_type(Adapter("x").for_key("a"), Adapter)
+Adapter.for_key.clear_cache()
+Adapter.for_key(1)  # E
+Adapter.for_key.missing  # E
+'''
+"pyproject.toml" = '''
+[tool.mypy]
+python_version = "3.10"
+strict = true
+
+[tool.pyright]
+pythonVersion = "3.10"
+
+[tool.ty.environment]
+python-version = "3.10"
+'''
+
+[probes."patterns/generic-default-no-runtime-dep"]
+"p.py" = '''
+# claim: A PEP 696 default declared with typing_extensions.TypeVar under TYPE_CHECKING (plain TypeVar at runtime) lets a subclass add the parameter while bare uses stay valid under mypy --strict (disallow_any_generics), pyright and ty.
+# extra: python p.py
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, Generic
+
+from typing_extensions import assert_type
+
+if TYPE_CHECKING:
+    from typing_extensions import TypeVar
+
+    M = TypeVar("M", default=Any)
+else:
+    from typing import TypeVar
+
+    M = TypeVar("M")
+
+
+class Base(Generic[M]):
+    def __init__(self, model: M) -> None:
+        self.model = model
+
+
+class Flow(Base[M]):
+    pass
+
+
+class Order:
+    pass
+
+
+class Light(Flow):
+    pass
+
+
+class OrderFlow(Flow[Order]):
+    pass
+
+
+assert_type(OrderFlow(Order()).model, Order)
+assert_type(Light(object()).model, Any)
+if TYPE_CHECKING:
+    bad: Flow[int, str]  # E
+'''
+"pyproject.toml" = '''
+[tool.mypy]
+python_version = "3.10"
+strict = true
+
+[tool.pyright]
+pythonVersion = "3.10"
+
+[tool.ty.environment]
+python-version = "3.10"
+'''
+
+[probes."patterns/metaclass-returns-instance"]
+"p.py" = '''
+# claim: When a metaclass turns a class statement into an instance, properties declared on the metaclass under TYPE_CHECKING give the class object the instance API in all three checkers.
+from __future__ import annotations
+
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
+
+from typing_extensions import assert_type
+
+
+class Link:
+    def __init__(self, source: Node, target: Node) -> None:
+        self.source, self.target = source, target
+
+
+class Node:
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+    def connect(self, other: Node) -> Link:
+        return Link(self, other)
+
+
+class NodeFactory(type):
+    def __new__(mcs, name: str, bases: tuple[type, ...], ns: dict[str, Any]) -> Any:
+        return Node(name)
+
+    if TYPE_CHECKING:
+
+        @property
+        def name(cls) -> str: ...
+        @property
+        def connect(cls) -> Callable[[Node], Link]: ...
+
+
+class Group(metaclass=NodeFactory):
+    pass
+
+
+leaf = Node("leaf")
+assert_type(Group.name, str)
+assert_type(Group.connect(leaf), Link)
+Group.missing  # E
+Group.connect("leaf")  # E
+'''
+"pyproject.toml" = '''
+[tool.mypy]
+python_version = "3.10"
+strict = true
+
+[tool.pyright]
+pythonVersion = "3.10"
+
+[tool.ty.environment]
+python-version = "3.10"
+'''
+
+[probes."patterns/mixin-injected-attribute"]
+"p.py" = '''
+# claim: A Generic mixin that declares the attribute it injects at runtime gives subclasses a precise type for it, and typos still error, in all three checkers.
+from __future__ import annotations
+
+from typing import Any, ClassVar, Generic, TypeVar
+
+from typing_extensions import assert_type
+
+
+class Tracker:
+    def __init__(self, model: object) -> None:
+        self.model = model
+
+
+M = TypeVar("M", bound=Tracker)
+
+
+class TrackerMixin(Generic[M]):
+    tracker_class: ClassVar[type[Tracker]]
+    tracker_attr: ClassVar[str] = "tracker"
+    tracker: M
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        setattr(self, self.tracker_attr, self.tracker_class(self))
+
+
+class OrderTracker(Tracker):
+    def approve(self) -> bool:
+        return True
+
+
+class Order(TrackerMixin[OrderTracker]):
+    tracker_class = OrderTracker
+
+
+order = Order()
+assert_type(order.tracker, OrderTracker)
+assert_type(order.tracker.approve(), bool)
+order.trakcer  # E
+'''
+"pyproject.toml" = '''
+[tool.mypy]
+python_version = "3.10"
+strict = true
+
+[tool.pyright]
+pythonVersion = "3.10"
+
+[tool.ty.environment]
+python-version = "3.10"
+'''
+
+[probes."patterns/object-vs-any-param"]
+"p.py" = '''
+# claim: A parameter typed object accepts any argument but keeps the body checked; Any disables checking of every use.
+from typing import Any
+def log_any(value: Any) -> None:
+    value.upper()
+
+
+def log_object(value: object) -> None:
+    value.upper()  # E
+
+
+log_object(1)
+'''
+"pyproject.toml" = '''
+[tool.mypy]
+python_version = "3.10"
+strict = true
+
+[tool.pyright]
+pythonVersion = "3.10"
+
+[tool.ty.environment]
+python-version = "3.10"
+'''
+
+[probes."patterns/overload-pitfalls"]
+"p.py" = '''
+# claim: Overload checks: an implementation that cannot accept every overload is an error in all three checkers (ty reports it on the overload); an earlier broader overload that hides a later one, and overlapping overloads with incompatible returns, are flagged by mypy and pyright but not by ty 0.0.86.
+from __future__ import annotations
+
+from typing import overload
+
+
+@overload
+def load(key: int) -> int: ...
+@overload
+def load(key: str) -> str: ...  # E[ty]
+def load(key: int) -> int | str:  # E[mypy,pyright]
+    return key
+
+
+@overload
+def first(value: object) -> int: ...
+@overload
+def first(value: str) -> str: ...  # E[mypy,pyright]
+def first(value: object) -> int | str:
+    return 0
+
+
+@overload
+def size(value: int, /) -> int: ...  # E[mypy,pyright]
+@overload
+def size(*args: object) -> str: ...
+def size(*args: object) -> int | str:
+    return 0
+'''
+"pyproject.toml" = '''
+[tool.mypy]
+python_version = "3.10"
+strict = true
+
+[tool.pyright]
+pythonVersion = "3.10"
+
+[tool.ty.environment]
+python-version = "3.10"
+'''
+
+[probes."patterns/paramspec-dual-decorator"]
+"p.py" = '''
+# claim: A retry decorator usable as @retry and @retry(times=...) on sync and async functions keeps exact signatures with two overloads, a typed implementation, an async helper over Callable[P, Awaitable[R]] and one cast.
+from __future__ import annotations
+
+import functools
+import inspect
+from collections.abc import Awaitable, Callable, Coroutine
+from typing import Any, TypeVar, cast, overload
+
+from typing_extensions import ParamSpec, assert_type
+
+P = ParamSpec("P")
+R = TypeVar("R")
+
+
+@overload
+def retry(func: Callable[P, R], /) -> Callable[P, R]: ...
+@overload
+def retry(*, times: int = 3) -> Callable[[Callable[P, R]], Callable[P, R]]: ...
+def retry(
+    func: Callable[P, R] | None = None, /, *, times: int = 3
+) -> Callable[P, R] | Callable[[Callable[P, R]], Callable[P, R]]:
+    def decorate(fn: Callable[P, R]) -> Callable[P, R]:
+        if inspect.iscoroutinefunction(fn):
+            return cast("Callable[P, R]", _retry_async(fn, times))
+        return _retry_sync(fn, times)
+
+    return decorate if func is None else decorate(func)
+
+
+def _retry_sync(fn: Callable[P, R], times: int) -> Callable[P, R]:
+    @functools.wraps(fn)
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+        for _ in range(times - 1):
+            try:
+                return fn(*args, **kwargs)
+            except Exception:
+                pass
+        return fn(*args, **kwargs)
+
+    return wrapper
+
+
+def _retry_async(
+    fn: Callable[P, Awaitable[R]], times: int
+) -> Callable[P, Coroutine[Any, Any, R]]:
+    @functools.wraps(fn)
+    async def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+        for _ in range(times - 1):
+            try:
+                return await fn(*args, **kwargs)
+            except Exception:
+                pass
+        return await fn(*args, **kwargs)
+
+    return wrapper
+
+
+@retry
+def parse(data: bytes, strict: bool = False) -> dict[str, int]:
+    return {}
+
+
+@retry(times=5)
+async def fetch(url: str, *, timeout: float = 1.0) -> bytes:
+    return b""
+
+
+assert_type(parse(b"", strict=True), dict[str, int])
+parse("text")  # E
+
+
+async def main() -> None:
+    assert_type(await fetch("u", timeout=2.0), bytes)
+    await fetch(1)  # E
+'''
+"pyproject.toml" = '''
+[tool.mypy]
+python_version = "3.10"
+strict = true
+
+[tool.pyright]
+pythonVersion = "3.10"
+
+[tool.ty.environment]
+python-version = "3.10"
+'''
+
+[probes."patterns/typealias-string-forward-ref"]
+"p.py" = '''
+# claim: A string-valued alias needs an explicit TypeAlias annotation; without it the assignment is a plain str variable and using it as a type errors in all three checkers.
+from __future__ import annotations
+
+from typing_extensions import TypeAlias
+
+
+Plain = "int | Handler"
+Spec: TypeAlias = "int | Handler"
+
+
+class Handler:
+    pass
+
+
+def run(spec: Spec) -> None: ...
+def run_plain(spec: Plain) -> None: ...  # E
+'''
+"pyproject.toml" = '''
+[tool.mypy]
+python_version = "3.10"
+strict = true
+
+[tool.pyright]
+pythonVersion = "3.10"
+
+[tool.ty.environment]
+python-version = "3.10"
+'''
+
+[probes."patterns/typeddict-closed"]
+"p.py" = '''
+# claim: PEP 728 closed=True (typing_extensions) rejects unknown keys in mypy, pyright and ty; extra_items is supported by pyright and ty; mypy 2.4 rejects the extra_items keyword and treats the class as closed.
+from __future__ import annotations
+
+from typing_extensions import TypedDict
+
+
+class Options(TypedDict, closed=True):
+    verbose: bool
+
+
+class Labels(TypedDict, extra_items=str):  # E[mypy]
+    name: str
+
+
+ok: Options = {"verbose": True}
+bad: Options = {"verbose": True, "color": "red"}  # E
+labels: Labels = {"name": "a", "team": "core"}  # E[mypy]
+wrong: Labels = {"name": "a", "team": 1}  # E
+'''
+"pyproject.toml" = '''
+[tool.mypy]
+python_version = "3.10"
+strict = true
+
+[tool.pyright]
+pythonVersion = "3.10"
+
+[tool.ty.environment]
+python-version = "3.10"
+'''
+
+[probes."patterns/typeddict-discriminated-union"]
+"p.py" = '''
+# claim: TypedDict unions narrow on a Literal discriminator key, NotRequired keys must be read with .get, and ReadOnly keys reject assignment, in all three checkers.
+from __future__ import annotations
+
+from typing import Literal, Union
+
+from typing_extensions import NotRequired, ReadOnly, TypedDict, assert_type
+
+
+class Cat(TypedDict):
+    kind: Literal["cat"]
+    lives: int
+
+
+class Dog(TypedDict):
+    kind: Literal["dog"]
+    good: NotRequired[bool]
+
+
+Pet = Union[Cat, Dog]
+
+
+def describe(pet: Pet) -> int:
+    if pet["kind"] == "cat":
+        assert_type(pet, Cat)
+        return pet["lives"]
+    assert_type(pet, Dog)
+    assert_type(pet.get("good"), bool | None)
+    return 0
+
+
+class Settings(TypedDict):
+    name: ReadOnly[str]
+
+
+def rename(settings: Settings) -> None:
+    settings["name"] = "x"  # E
+
+
+def lives(pet: Pet) -> int:
+    return pet["lives"]  # E
+'''
+"pyproject.toml" = '''
+[tool.mypy]
+python_version = "3.10"
+strict = true
+
+[tool.pyright]
+pythonVersion = "3.10"
+
+[tool.ty.environment]
+python-version = "3.10"
+'''
+
+[probes."patterns/typeis-vs-typeguard"]
+"p.py" = '''
+# claim: TypeIs narrows both branches and requires the narrowed type to be consistent with the input; TypeGuard narrows only the positive branch.
+from __future__ import annotations
+
+from typing_extensions import TypeGuard, TypeIs, assert_type
+
+
+def is_str(value: object) -> TypeIs[str]:
+    return isinstance(value, str)
+
+
+def guard_str(value: object) -> TypeGuard[str]:
+    return isinstance(value, str)
+
+
+def check(value: int | str) -> None:
+    if is_str(value):
+        assert_type(value, str)
+    else:
+        assert_type(value, int)
+    if not guard_str(value):
+        assert_type(value, int | str)
+
+
+def bad(value: int) -> TypeIs[str]:  # E
+    return False
+'''
+"pyproject.toml" = '''
+[tool.mypy]
+python_version = "3.10"
+strict = true
+
+[tool.pyright]
+pythonVersion = "3.10"
+
+[tool.ty.environment]
+python-version = "3.10"
+'''
+
+[probes."patterns/variance-pep695"]
+"p.py" = '''
+# claim: PEP 695 type parameters infer variance from use: read-only use is covariant, parameter-only use is contravariant, a mutable attribute is invariant.
+from collections.abc import Callable
+
+
+class Box[T]:
+    def __init__(self, item: T) -> None:
+        self._item = item
+
+    def get(self) -> T:
+        return self._item
+
+
+class Sink[T]:
+    def put(self, item: T) -> None: ...
+
+
+class Cell[T]:
+    def __init__(self, item: T) -> None:
+        self.item = item
+
+
+box: Box[object] = Box[int](1)
+sink: Sink[int] = Sink[object]()
+cell: Cell[object] = Cell[int](1)  # E
+handler: Callable[[], Box[object]] = lambda: Box[int](1)
+'''
+"pyproject.toml" = '''
+[tool.mypy]
+python_version = "3.12"
+strict = true
+
+[tool.pyright]
+pythonVersion = "3.12"
+
+[tool.ty.environment]
+python-version = "3.12"
+'''
+
+[probes."patterns/generic-default-to-bound"]
+"p.py" = '''
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Generic
+
+from typing_extensions import assert_type
+
+if TYPE_CHECKING:
+    from typing_extensions import TypeVar
+else:
+    from typing import TypeVar
+
+
+class Machine:
+    def send(self, event: str) -> None: ...
+
+
+class OrderMachine(Machine): ...
+
+
+if TYPE_CHECKING:
+    M = TypeVar("M", bound=Machine, default=Machine)
+else:
+    M = TypeVar("M", bound=Machine)
+
+
+class Host(Generic[M]):
+    machine: M
+
+
+class Order(Host[OrderMachine]): ...
+
+
+class Plain(Host): ...
+
+
+def check(order: Order, plain: Plain) -> None:
+    assert_type(order.machine, OrderMachine)
+    assert_type(plain.machine, Machine)
+    plain.machine.send("go")
+    plain.machine.missing_attribute
+'''
+"pyproject.toml" = '''
+[tool.mypy]
+python_version = "3.10"
+strict = true
+
+[tool.pyright]
+pythonVersion = "3.10"
+
+[tool.ty.environment]
+python-version = "3.10"
+'''

@@ -1,0 +1,646 @@
+# Cross-checker claims for references/cross-checker.md.
+# Probe lines in sup-matrix/s.py: 1-7 have an error in every checker, 8-14 have none.
+# Comment forms per line: 1/8 bare type: ignore, 2/9 type: ignore[mypy-code],
+# 3/10 type: ignore[ty:rule], 4/11 type: ignore[code, ty:rule], 5/12 bare pyright: ignore,
+# 6/13 pyright: ignore[rule], 7/14 ty: ignore[rule].
+
+[[claim]]
+id = "cross-mypy-only-reads-type-ignore"
+ref = "cross-checker.md"
+statement = "mypy ignores `# pyright: ignore` and `# ty: ignore` comments entirely"
+probe = "cross/sup-matrix"
+cmd = ["mypy", "s.py"]
+expect_exit = 1
+expect_output = ['^s\.py:5: error: Incompatible', '^s\.py:6: error: Incompatible', '^s\.py:7: error: Incompatible']
+expect_no_output = ['^s\.py:1[234]:']
+
+[[claim]]
+id = "cross-mypy-ty-codes-break-unused-ignore"
+ref = "cross-checker.md"
+statement = "mypy treats `ty:` codes inside `type: ignore[...]` as its own codes: alone they do not cover the mypy error, combined they are reported unused under warn_unused_ignores"
+probe = "cross/sup-matrix"
+cmd = ["mypy", "s.py"]
+expect_output = [
+  '^s\.py:3: note: Error code "assignment" not covered by "type: ignore\[ty:invalid-assignment\]"',
+  '^s\.py:4: error: Unused "type: ignore\[ty:invalid-assignment\]" comment',
+]
+
+[[claim]]
+id = "cross-mypy-unused-ignore-any-code"
+ref = "cross-checker.md"
+statement = "mypy warn_unused_ignores reports every unneeded `type: ignore`, bare or coded"
+probe = "cross/sup-matrix"
+cmd = ["mypy", "s.py"]
+expect_output = ['^s\.py:8: error: Unused "type: ignore"', '^s\.py:9: error: Unused "type: ignore"', '^s\.py:11: error: Unused']
+
+[[claim]]
+id = "cross-pyright-honors-type-ignore-with-any-code"
+ref = "cross-checker.md"
+statement = "pyright (enableTypeIgnoreComments default true) honors `# type: ignore[...]` whatever the code, plus `# pyright: ignore`, but not `# ty: ignore`"
+probe = "cross/sup-matrix"
+cmd = ["pyright", "s.py"]
+expect_exit = 1
+expect_output = ['s\.py:7:11 - error']
+expect_no_output = ['s\.py:[1-6]:11 - error']
+
+[[claim]]
+id = "cross-pyright-flags-unneeded-type-ignore"
+ref = "cross-checker.md"
+statement = "pyright reportUnnecessaryTypeIgnoreComment flags every unneeded `type: ignore` (any code) and `pyright: ignore`, and ignores `ty: ignore`"
+probe = "cross/sup-matrix"
+cmd = ["pyright", "s.py"]
+expect_output = [
+  's\.py:8:16 - error: Unnecessary "# type: ignore" comment',
+  's\.py:9:16 - error: Unnecessary "# type: ignore" comment',
+  's\.py:11:16 - error: Unnecessary "# type: ignore" comment',
+  's\.py:12:16 - error: Unnecessary',
+  's\.py:13:32 - error: Unnecessary "# pyright: ignore" rule: "reportAssignmentType"',
+]
+expect_no_output = ['s\.py:14:']
+
+[[claim]]
+id = "cross-pyright-etic-false"
+ref = "cross-checker.md"
+statement = "With enableTypeIgnoreComments = false pyright neither honors nor reports `type: ignore`; only `pyright: ignore` counts"
+probe = "cross/sup-etic-false"
+cmd = ["pyright", "s.py"]
+expect_output = ['s\.py:1:11 - error', 's\.py:4:11 - error', 's\.py:12:16 - error: Unnecessary', 's\.py:13:32 - error: Unnecessary']
+expect_no_output = ['s\.py:[56]:11 - error', 's\.py:(8|9|10|11):16']
+
+[[claim]]
+id = "cross-basedpyright-default-ignores-type-ignore"
+ref = "cross-checker.md"
+statement = "basedpyright defaults to enableTypeIgnoreComments = false and warns on `# pyright: ignore` without a rule (reportIgnoreCommentWithoutRule)"
+probe = "cross/sup-matrix"
+cmd = ["basedpyright", "s.py"]
+expect_output = ['s\.py:1:11 - error', 's\.py:4:11 - error', 's\.py:5:18 - warning: `pyright: ignore` comment must specify a rule']
+expect_no_output = ['s\.py:6:11 - error', 's\.py:(8|9|10|11):16']
+
+[[claim]]
+id = "cross-ty-type-ignore-codes"
+ref = "cross-checker.md"
+statement = "ty honors bare `# type: ignore` and `type: ignore[ty:rule]` (also inside a combined list) but not `type: ignore[mypy-code]`, nor `# pyright: ignore`"
+probe = "cross/sup-matrix"
+cmd = ["ty", "check", "--output-format", "concise", "s.py"]
+expect_output = ['^s\.py:2:11: error\[invalid-assignment\]', '^s\.py:5:11: error\[invalid-assignment\]', '^s\.py:6:11: error\[invalid-assignment\]']
+expect_no_output = ['^s\.py:[1347]:11:']
+
+[[claim]]
+id = "cross-ty-unused-type-ignore"
+ref = "cross-checker.md"
+statement = "ty reports unneeded bare and `ty:`-coded `type: ignore` (unused-type-ignore-comment) and `ty: ignore` (unused-ignore-comment), but never a `type: ignore` carrying only mypy codes"
+probe = "cross/sup-matrix"
+cmd = ["ty", "check", "--output-format", "concise", "s.py"]
+expect_output = [
+  '^s\.py:8:14: error\[unused-type-ignore-comment\] Unused blanket',
+  '^s\.py:10:14: error\[unused-type-ignore-comment\]',
+  '^s\.py:11:41: error\[unused-type-ignore-comment\]',
+  '^s\.py:14:14: error\[unused-ignore-comment\]',
+]
+expect_no_output = ['^s\.py:(9|12|13):']
+
+[[claim]]
+id = "cross-ty-unused-default-warn-exit-1"
+ref = "cross-checker.md"
+statement = "ty's unused-ignore rules default to warn, and a warning alone makes `ty check` exit 1"
+probe = "cross/sup-ty-warn"
+cmd = ["ty", "check", "--output-format", "concise", "w.py"]
+expect_exit = 1
+expect_output = ['warning\[unused-type-ignore-comment\]']
+
+[[claim]]
+id = "cross-ty-respect-type-ignore-false"
+ref = "cross-checker.md"
+statement = "ty `respect-type-ignore-comments = false` makes ty ignore every `type: ignore`"
+probe = "cross/ty-respect-false"
+cmd = ["ty", "check", "--output-format", "concise", "n.py"]
+expect_output = ['^n\.py:1:10: error\[invalid-assignment\]']
+
+[[claim]]
+id = "cross-file-level-type-ignore"
+ref = "cross-checker.md"
+statement = "A `# type: ignore` line before any code silences the whole file in mypy, pyright and ty; after a docstring it is just an unused ignore"
+probe = "cross/file-ignore"
+cmd = ["sh", "-c", "mypy f1.py; pyright f1.py; ty check --output-format concise f1.py; echo F4; mypy f4.py; pyright f4.py; ty check --output-format concise f4.py"]
+expect_output = ['(?s)Success: no issues found.*0 errors.*All checks passed!.*F4', 'f4\.py:2: error: Unused "type: ignore"', 'f4\.py:3:10 - error', 'f4\.py:2:1: error\[unused-type-ignore-comment\]']
+expect_no_output = ['f1\.py:\d']
+
+[[claim]]
+id = "cross-mypy-type-ignore-must-come-first"
+ref = "cross-checker.md"
+statement = "mypy only sees `# type: ignore` when it is the first comment on the line; pyright and ty find their comments anywhere"
+probe = "cross/sup-order"
+cmd = ["sh", "-c", "mypy c.py; echo TY; ty check --output-format concise c.py"]
+expect_output = ['^c\.py:3: error: Incompatible', '^c\.py:4: error: Incompatible', '^c\.py:5: error: Incompatible', 'TY\nAll checks passed!']
+expect_no_output = ['^c\.py:[12]: error']
+
+[[claim]]
+id = "cross-pyright-redundant-next-to-type-ignore"
+ref = "cross-checker.md"
+statement = "With default pyright settings a `# pyright: ignore[rule]` next to a `# type: ignore[code]` that already covers the line is reported unnecessary"
+probe = "cross/sup-order"
+cmd = ["pyright", "c.py"]
+expect_output = ['c\.py:1:62 - error: Unnecessary "# pyright: ignore" rule', 'c\.py:3:34 - error: Unnecessary "# pyright: ignore" rule']
+expect_no_output = ['c\.py:2:\d+ - error']
+
+[[claim]]
+id = "cross-mypy-only-error-conflicts-with-pyright"
+ref = "cross-checker.md"
+statement = "A `# type: ignore[code]` for a mypy-only error is reported unnecessary by pyright unless enableTypeIgnoreComments = false; a bare `# ty: ignore` suppresses every ty diagnostic on the line"
+probe = "cross/mypy-only-ignore"
+cmd = ["sh", "-c", "mypy m.py; pyright m.py; ty check --output-format concise m.py; echo ETIC; cp pyproject-etic-false.toml pyproject.toml; pyright m.py"]
+expect_output = ['m\.py:10:12 - error: Unnecessary "# type: ignore" comment', 'All checks passed!', '(?s)ETIC(?!.*m\.py:10:12).*m\.py:11:10 - error']
+expect_no_output = ['^m\.py:10: error']
+
+[[claim]]
+id = "cross-return-inference"
+ref = "cross-checker.md"
+statement = "The result of a call to a function without a return annotation is Any in mypy, Unknown in ty; only pyright infers it"
+probe = "cross/divergences"
+cmd = ["sh", "-c", "mypy d1.py; pyright d1.py; ty check --output-format concise d1.py"]
+expect_output = ['d1\.py:17: note: Revealed type is "Any"', 'd1\.py:17:13 - information: Type of "ret\(\)" is "C"', 'd1\.py:17:13: info\[revealed-type\] Revealed type: `Unknown`']
+
+[[claim]]
+id = "cross-untyped-body"
+ref = "cross-checker.md"
+statement = "mypy skips bodies of unannotated functions by default (annotation-unchecked note); pyright and ty check them"
+probe = "cross/divergences"
+cmd = ["sh", "-c", "mypy d1.py; pyright d1.py; ty check --output-format concise d1.py"]
+expect_output = ['d1\.py:20: note: By default the bodies of untyped functions are not checked', 'd1\.py:20:14 - error', 'd1\.py:20:14: error\[invalid-assignment\]']
+
+[[claim]]
+id = "cross-method-assign"
+ref = "cross-checker.md"
+statement = "Assigning to a method: on the class only mypy errors (method-assign); on an instance mypy (method-assign) and ty (invalid-assignment) error; pyright is silent"
+probe = "cross/divergences"
+cmd = ["sh", "-c", "mypy d1.py; pyright d1.py; ty check --output-format concise d1.py"]
+expect_output = ['d1\.py:10: error: Cannot assign to a method  \[method-assign\]', 'd1\.py:12: error: Cannot assign to a method', 'd1\.py:12:1: error\[invalid-assignment\]']
+expect_no_output = ['d1\.py:1[02]:\d+ - error', 'd1\.py:10:\d+: error']
+
+[[claim]]
+id = "cross-possibly-unbound-loop"
+ref = "cross-checker.md"
+statement = "A variable bound only inside a `for` loop and used after it is reported possibly unbound by pyright only"
+probe = "cross/divergences"
+cmd = ["sh", "-c", "mypy d1.py; pyright d1.py; ty check --output-format concise d1.py"]
+expect_output = ['d1\.py:25:7 - error: "last" is possibly unbound \(reportPossiblyUnboundVariable\)']
+expect_no_output = ['d1\.py:25: error', 'd1\.py:25:\d+: (error|warning)']
+
+[[claim]]
+id = "cross-hasattr-narrowing"
+ref = "cross-checker.md"
+statement = "After `hasattr(o, 'name')` on an `object`, mypy gives Any, pyright errors (Unknown), ty gives object"
+probe = "cross/divergences"
+cmd = ["sh", "-c", "mypy d1.py; pyright d1.py; ty check --output-format concise d1.py"]
+expect_output = ['d1\.py:35: note: Revealed type is "Any"', 'd1\.py:35:23 - error: Cannot access attribute "name" for class "object"', 'd1\.py:35:21: info\[revealed-type\] Revealed type: `object`']
+
+[[claim]]
+id = "cross-metaclass-call"
+ref = "cross-checker.md"
+statement = "mypy ignores a metaclass `__call__` return type when evaluating a constructor call; pyright and ty honor it"
+probe = "cross/divergences"
+cmd = ["sh", "-c", "mypy d2.py; pyright d2.py; ty check --output-format concise d2.py"]
+expect_output = ['d2\.py:11: note: Revealed type is "d2\.Weird"', 'd2\.py:11:13 - information: Type of "Weird\("a"\)" is "int"', 'd2\.py:11:13: info\[revealed-type\] Revealed type: `int`']
+
+[[claim]]
+id = "cross-overload-any-arg"
+ref = "cross-checker.md"
+statement = "Calling an overloaded function with an Any argument that matches several overloads yields Any (mypy) or Unknown (pyright, ty)"
+probe = "cross/divergences"
+cmd = ["sh", "-c", "mypy d2.py; pyright d2.py; ty check --output-format concise d2.py"]
+expect_output = ['d2\.py:21: note: Revealed type is "Any"', 'd2\.py:21:17 - information: Type of "ov\(a\)" is "Unknown"', 'd2\.py:21:17: info\[revealed-type\] Revealed type: `Unknown`']
+
+[[claim]]
+id = "cross-typeddict-extra-key-codes"
+ref = "cross-checker.md"
+statement = "An extra key in a TypedDict literal is an error everywhere, under different codes: typeddict-unknown-key, reportAssignmentType, invalid-key"
+probe = "cross/divergences"
+cmd = ["sh", "-c", "mypy d2.py; pyright d2.py; ty check --output-format concise d2.py"]
+expect_output = ['d2\.py:32: error: Extra key "year" for TypedDict "Movie"  \[typeddict-unknown-key\]', 'd2\.py:32:27 - error: Type "dict\[str, str \| int\]" is not assignable', 'd2\.py:32:27: error\[invalid-key\]']
+
+[[claim]]
+id = "cross-assert-type-def-vs-callable"
+ref = "cross-checker.md"
+statement = "assert_type of a def against a Callable[...] type fails in all three checkers (a def type is not equivalent to a Callable)"
+probe = "cross/divergences"
+cmd = ["sh", "-c", "mypy d2.py; pyright d2.py; ty check --output-format concise d2.py"]
+expect_output = ['d2\.py:37: error: Expression is of type "def fn', 'd2\.py:37:13 - error: "assert_type" mismatch', 'd2\.py:37:1: error\[assert-type-unspellable-subtype\]']
+
+[[claim]]
+id = "cross-coroutine-type"
+ref = "cross-checker.md"
+statement = "An un-awaited coroutine call is Coroutine[Any, Any, T] in mypy but CoroutineType[Any, Any, T] in pyright and ty"
+probe = "cross/divergences"
+cmd = ["sh", "-c", "mypy d2.py; pyright d2.py; ty check --output-format concise d2.py"]
+expect_output = ['d2\.py:43: note: Revealed type is "typing\.Coroutine\[Any, Any, int\]"', 'd2\.py:43:13 - information: Type of "co\(\)" is "CoroutineType\[Any, Any, int\]"', 'd2\.py:43:13: info\[revealed-type\] Revealed type: `CoroutineType\[Any, Any, int\]`']
+
+[[claim]]
+id = "cross-descriptor-leaks-to-annotated-classvars"
+ref = "cross-checker.md"
+statement = "A class attribute annotated `D | None = None`, where D defines `__get__`, is read through `D.__get__` in all three checkers"
+probe = "cross/divergences"
+cmd = ["sh", "-c", "mypy d2.py; pyright d2.py; ty check --output-format concise d2.py"]
+expect_output = ['d2\.py:56: note: Revealed type is "builtins\.int \| None"|d2\.py:56: note: Revealed type is "int \| None"', 'd2\.py:56:13 - information: Type of "Other\(\)\.slot" is "int \| None"', 'd2\.py:56:13: info\[revealed-type\] Revealed type: `int \| None`']
+
+[[claim]]
+id = "cross-property-overrides-attribute"
+ref = "cross-checker.md"
+statement = "A read-only property overriding a writable attribute is an error in all three checkers"
+probe = "cross/divergences"
+cmd = ["sh", "-c", "mypy d2.py; pyright d2.py; ty check --output-format concise d2.py"]
+expect_output = ['d2\.py:71: error: Cannot override writeable attribute with read-only property', 'd2\.py:71:9 - error: "name" overrides symbol', 'd2\.py:71:9: error\[[a-z-]+\] Invalid override of attribute `name`']
+
+[[claim]]
+id = "cross-joins-vs-unions"
+ref = "cross-checker.md"
+statement = "Mixed literals: mypy joins list/dict items to object; ty keeps the union; pyright reports Unknown item types; ternaries are int | str in mypy and Literal unions elsewhere"
+probe = "cross/joins"
+cmd = ["sh", "-c", "mypy j.py; pyright j.py; ty check --output-format concise j.py"]
+expect_output = [
+  'j\.py:5: note: Revealed type is "int \| str"', 'j\.py:6: note: Revealed type is "list\[object\]"',
+  'j\.py:6:17 - information: Type of "\[1, "a"\]" is "list\[Unknown\]"', "j\\.py:5:17 - information: Type of \"x\" is \"Literal\\[1, 's'\\]\"",
+  'j\.py:6:17: info\[revealed-type\] Revealed type: `list\[int \| str\]`',
+]
+
+[[claim]]
+id = "cross-version-source"
+ref = "cross-checker.md"
+statement = "ty takes the target version from requires-python; mypy and pyright use the running interpreter unless python_version / pythonVersion is set"
+probe = "cross/version-source"
+cmd = ["sh", "-c", "mypy p.py; pyright p.py; ty check --output-format concise p.py; echo PINNED; cp pyproject-pinned.toml pyproject.toml; mypy p.py; pyright p.py"]
+expect_output = ['(?s)Success: no issues found.*0 errors.*p\.py:1:20: error\[unresolved-import\] Module `typing` has no member `assert_type`.*PINNED', 'PINNED\np\.py:1: error: Module "typing" has no attribute "assert_type"', '"assert_type" is unknown import symbol']
+
+[[claim]]
+id = "cross-ty-project-root"
+ref = "cross-checker.md"
+statement = "ty resolves first-party imports from the project root discovered from the working directory; run outside it, the probe gets unresolved-import and Unknown"
+probe = "cross/probe-root"
+cmd = ["sh", "-c", "cd proj && ty check --output-format concise probe.py; cd ../outside && ty check --output-format concise probe.py"]
+expect_output = ['All checks passed!', 'probe\.py:2:6: error\[unresolved-import\] Cannot resolve imported module `pkg`', 'Type `Unknown` does not match asserted type `int`']
+
+[[claim]]
+id = "cross-mypy-assert-type-unchecked"
+ref = "cross-checker.md"
+statement = "assert_type inside an unannotated function fails in mypy because the body is unchecked; annotate `-> None`"
+probe = "cross/unchecked-body"
+cmd = ["mypy", "t.py"]
+expect_output = ['t\.py:4: note: "assert_type" expects everything to be "Any" in unchecked functions', 't\.py:7: error: Expression is of type "int", not "str"']
+
+[[claim]]
+id = "cross-cli-interpreter-flags"
+ref = "cross-checker.md"
+statement = "Point each checker at the project interpreter: mypy --python-executable, pyright --pythonpath, ty check --python"
+probe = "cross/cli-flags"
+cmd = ["sh", "-c", "mypy --help; pyright --help; ty check --help"]
+expect_output = ['--python-executable', '--pythonpath', '--python <PATH>']
+
+[[claim]]
+id = "cross-file-level-mode-comments"
+ref = "cross-checker.md"
+statement = "`# mypy: ignore-errors` silences the file for mypy only; `# pyright: basic` is a mode, not a suppression, and still reports type errors"
+probe = "cross/file-ignore"
+cmd = ["sh", "-c", "mypy f2.py; pyright f2.py; ty check --output-format concise f2.py; echo F3; mypy f3.py; pyright f3.py; ty check --output-format concise f3.py"]
+expect_output = ['^Success: no issues found', 'f2\.py:2:10 - error', 'f2\.py:2:10: error\[invalid-assignment\]', 'f3\.py:2: error: Incompatible', 'f3\.py:2:10 - error', 'f3\.py:2:10: error\[invalid-assignment\]']
+
+
+[probes."cross/sup-matrix"]
+"pyproject.toml" = '''
+[tool.mypy]
+warn_unused_ignores = true
+
+[tool.pyright]
+reportUnnecessaryTypeIgnoreComment = "error"
+
+[tool.ty.rules]
+unused-ignore-comment = "error"
+unused-type-ignore-comment = "error"
+'''
+"s.py" = '''
+a1: int = "x"  # type: ignore
+a2: int = "x"  # type: ignore[assignment]
+a3: int = "x"  # type: ignore[ty:invalid-assignment]
+a4: int = "x"  # type: ignore[assignment, ty:invalid-assignment]
+a5: int = "x"  # pyright: ignore
+a6: int = "x"  # pyright: ignore[reportAssignmentType]
+a7: int = "x"  # ty: ignore[invalid-assignment]
+u1: int = 1  # type: ignore
+u2: int = 1  # type: ignore[assignment]
+u3: int = 1  # type: ignore[ty:invalid-assignment]
+u4: int = 1  # type: ignore[assignment, ty:invalid-assignment]
+u5: int = 1  # pyright: ignore
+u6: int = 1  # pyright: ignore[reportAssignmentType]
+u7: int = 1  # ty: ignore[invalid-assignment]
+'''
+
+[probes."cross/sup-etic-false"]
+"pyproject.toml" = '''
+[tool.pyright]
+enableTypeIgnoreComments = false
+reportUnnecessaryTypeIgnoreComment = "error"
+'''
+"s.py" = '''
+a1: int = "x"  # type: ignore
+a2: int = "x"  # type: ignore[assignment]
+a3: int = "x"  # type: ignore[ty:invalid-assignment]
+a4: int = "x"  # type: ignore[assignment, ty:invalid-assignment]
+a5: int = "x"  # pyright: ignore
+a6: int = "x"  # pyright: ignore[reportAssignmentType]
+a7: int = "x"  # ty: ignore[invalid-assignment]
+u1: int = 1  # type: ignore
+u2: int = 1  # type: ignore[assignment]
+u3: int = 1  # type: ignore[ty:invalid-assignment]
+u4: int = 1  # type: ignore[assignment, ty:invalid-assignment]
+u5: int = 1  # pyright: ignore
+u6: int = 1  # pyright: ignore[reportAssignmentType]
+u7: int = 1  # ty: ignore[invalid-assignment]
+'''
+
+[probes."cross/sup-ty-warn"]
+"w.py" = '''
+x = 1  # type: ignore
+'''
+
+[probes."cross/ty-respect-false"]
+"n.py" = '''
+w: int = "x"  # type: ignore
+'''
+"pyproject.toml" = '''
+[tool.ty.analysis]
+respect-type-ignore-comments = false
+'''
+
+[probes."cross/file-ignore"]
+"f1.py" = '''
+# type: ignore
+x: int = "s"
+'''
+"f2.py" = '''
+# mypy: ignore-errors
+x: int = "s"
+'''
+"f3.py" = '''
+# pyright: basic
+x: int = "s"
+'''
+"f4.py" = '''
+"""doc."""
+# type: ignore
+x: int = "s"
+'''
+"pyproject.toml" = '''
+[tool.mypy]
+warn_unused_ignores = true
+
+[tool.pyright]
+reportUnnecessaryTypeIgnoreComment = "error"
+
+[tool.ty.rules]
+unused-ignore-comment = "error"
+unused-type-ignore-comment = "error"
+'''
+
+[probes."cross/sup-order"]
+"c.py" = '''
+b1: int = "x"  # type: ignore[assignment]  # pyright: ignore[reportAssignmentType]  # ty: ignore[invalid-assignment]
+b2: int = "x"  # type: ignore[assignment]  # ty: ignore[invalid-assignment]
+b3: int = "x"  # pyright: ignore[reportAssignmentType]  # type: ignore[assignment]  # ty: ignore[invalid-assignment]
+b4: int = "x"  # ty: ignore[invalid-assignment]  # type: ignore[assignment]
+b5: int = "x"  # noqa: E501  # type: ignore[assignment]  # ty: ignore[invalid-assignment]
+'''
+"pyproject.toml" = '''
+[tool.mypy]
+warn_unused_ignores = true
+
+[tool.pyright]
+reportUnnecessaryTypeIgnoreComment = "error"
+
+[tool.ty.rules]
+unused-ignore-comment = "error"
+unused-type-ignore-comment = "error"
+'''
+
+[probes."cross/mypy-only-ignore"]
+"m.py" = '''
+class C:
+    def m(self) -> int:
+        return 1
+
+
+def f(self: C) -> int:
+    return 2
+
+
+C.m = f  # type: ignore[method-assign]
+v: int = "x"  # ty: ignore
+'''
+"pyproject-etic-false.toml" = '''
+[tool.mypy]
+warn_unused_ignores = true
+[tool.pyright]
+enableTypeIgnoreComments = false
+reportUnnecessaryTypeIgnoreComment = "error"
+'''
+"pyproject.toml" = '''
+[tool.mypy]
+warn_unused_ignores = true
+
+[tool.pyright]
+reportUnnecessaryTypeIgnoreComment = "error"
+
+[tool.ty.rules]
+unused-ignore-comment = "error"
+unused-type-ignore-comment = "error"
+'''
+
+[probes."cross/divergences"]
+"d1.py" = '''
+from typing import reveal_type
+
+class C:
+    def m(self) -> int:
+        return 1
+
+def f(self: C) -> int:
+    return 2
+
+C.m = f
+c = C()
+c.m = lambda: 3
+
+def ret():
+    return C()
+
+reveal_type(ret())
+
+def body(x):
+    y: int = "no"
+    return x
+
+for i in range(3):
+    last = i
+print(last)
+
+def pick(flag: bool):
+    if flag:
+        return 1
+    return "a"
+reveal_type(pick(True))
+
+def h(o: object) -> None:
+    if hasattr(o, "name"):
+        reveal_type(o.name)
+
+class Holder:
+    items: list[int] | None = None
+
+def g(hh: Holder) -> None:
+    hh.items = [1]
+    reveal_type(hh.items)
+'''
+"d2.py" = '''
+from collections.abc import Callable
+from typing import Any, Self, TypedDict, assert_type, overload, reveal_type
+
+class Meta(type):
+    def __call__(cls, *args: Any, **kwargs: Any) -> int:
+        return 1
+
+class Weird(metaclass=Meta):
+    def __init__(self, x: str) -> None: ...
+
+reveal_type(Weird("a"))
+
+@overload
+def ov(x: int) -> int: ...
+@overload
+def ov(x: str) -> str: ...
+def ov(x: int | str) -> int | str:
+    return x
+
+def anyarg(a: Any) -> None:
+    reveal_type(ov(a))
+
+class Dyn:
+    def __getattr__(self, name: str) -> int:
+        return 1
+
+reveal_type(Dyn().whatever)
+
+class Movie(TypedDict):
+    title: str
+
+m: Movie = {"title": "x", "year": 1}
+
+def fn(a: int, b: str = "") -> float:
+    return 1.0
+
+assert_type(fn, Callable[[int, str], float])
+
+async def co() -> int:
+    return 1
+
+assert_type(co(), Any)
+reveal_type(co())
+
+class D:
+    @overload
+    def __get__(self, instance: None, owner: object) -> Self: ...
+    @overload
+    def __get__(self, instance: object, owner: object) -> int: ...
+    def __get__(self, instance: object, owner: object) -> "Self | int":
+        return 1
+
+class Other:
+    slot: D | None = None
+
+reveal_type(Other().slot)
+
+class Base:
+    @classmethod
+    def make(cls) -> Self:
+        return cls()
+
+class Sub(Base): ...
+reveal_type(Sub.make())
+
+class A:
+    name: str = ""
+
+class B(A):
+    @property
+    def name(self) -> str:
+        return "b"
+
+x = 1 if input() else "s"
+reveal_type([1, "a"])
+'''
+
+[probes."cross/joins"]
+"j.py" = '''
+from typing import reveal_type
+
+def f(b: bool) -> None:
+    x = 1 if b else "s"
+    reveal_type(x)
+    reveal_type([1, "a"])
+    reveal_type({"k": 1, "j": "v"})
+'''
+
+[probes."cross/version-source"]
+"p.py" = '''
+from typing import assert_type, reveal_type
+'''
+"pyproject-pinned.toml" = '''
+[project]
+name = "p"
+version = "0"
+requires-python = ">=3.10"
+
+[tool.pyright]
+pythonVersion = "3.10"
+
+[tool.mypy]
+python_version = "3.10"
+'''
+"pyproject.toml" = '''
+[project]
+name = "p"
+version = "0"
+requires-python = ">=3.10"
+'''
+
+[probes."cross/probe-root"]
+"outside/probe.py" = '''
+from typing import assert_type
+from pkg import two
+assert_type(two(), int)
+'''
+"proj/pkg/__init__.py" = '''
+def two() -> int:
+    return 2
+'''
+"proj/probe.py" = '''
+from typing import assert_type
+from pkg import two
+assert_type(two(), int)
+'''
+"proj/pyproject.toml" = '''
+[project]
+name="proj"
+version="0"
+requires-python=">=3.12"
+'''
+
+[probes."cross/unchecked-body"]
+"t.py" = '''
+from typing import assert_type
+
+def test_x():
+    assert_type(len("a"), int)
+
+def test_y() -> None:
+    assert_type(len("a"), str)
+'''
+
+[probes."cross/cli-flags"]
+".keep" = ""

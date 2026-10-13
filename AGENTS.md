@@ -11,6 +11,7 @@ agent-skills/
 │       ├── SKILL.md           # Required — skill definition with frontmatter
 │       ├── references/        # Optional — supporting documentation
 │       └── scripts/           # Optional — executable scripts
+├── claims/                    # Executable checks for factual claims in skill references (not installed)
 ├── AGENTS.md                  # This file — guidance for AI agents
 ├── README.md                  # Repository overview and install instructions
 └── LICENSE                    # MIT
@@ -76,6 +77,18 @@ This repository focuses on skills useful for:
 3. Add supporting files under `references/` or `scripts/` as needed
 4. Update the skills table in `README.md`
 5. Test the skill by installing it locally: `npx skills add . --skill <name>`
+
+## Verifying Claims
+
+Every non-obvious factual claim in a skill's references (checker behavior, defaults, flags) must be backed by an
+executable claim in `claims/<skill>/` that passes against the pinned toolchain. Each claim file holds the claims and
+the probe files they run. Re-run the claims when bumping a tool version, and update the reference with what the probe
+shows:
+
+```bash
+uv sync --project claims/python-typing/toolchain
+python3 claims/python-typing/verify.py
+```
 
 ## Quality Checklist
 
