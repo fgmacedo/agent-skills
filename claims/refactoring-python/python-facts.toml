@@ -1,0 +1,339 @@
+# Facts the skill states that differ from intuition. Each one runs as a probe; see verify.py.
+
+[[claim]]
+id = "mock-patch-target-after-move"
+ref = "SKILL.md"
+statement = "mock.patch on the defining module does not reach a caller that imported the name with from-import; the patch target is the module where the name is looked up, so moving a function silently un-mocks the tests that patched its old home."
+probe = "mock-patch-target"
+cmd = ["python", "p.py"]
+expect_output = ["^patched on the defining module: real$", "^patched where it is looked up: fake$"]
+
+[[claim]]
+id = "dataclass-eq-makes-instances-unhashable"
+ref = "pythonic.md"
+statement = "Turning a plain class into a @dataclass adds __eq__ and sets __hash__ to None: instances become equal by value and stop working as dict keys or set members unless frozen=True."
+probe = "dataclass-unhashable"
+cmd = ["python", "p.py"]
+expect_output = ["^plain hashable: True$", "^dataclass hashable: False", "^frozen hashable: True$", "plain equal: False dataclass equal: True"]
+
+[[claim]]
+id = "lru-cache-on-method-keeps-instances-alive"
+ref = "pythonic.md"
+statement = "functools.lru_cache on a method caches self as part of the key, so cached instances are never collected."
+probe = "lru-cache-method"
+cmd = ["python", "p.py"]
+expect_output = ["^instance alive after del: True$"]
+
+[[claim]]
+id = "logger-name-follows-the-module"
+ref = "transformations.md"
+statement = "logging.getLogger(__name__) names the logger after the module, so a function moved to another module logs under a new name and handlers or filters configured for the old name stop seeing its records."
+probe = "logger-name-follows-module"
+cmd = ["python", "p.py"]
+expect_output = ["^records captured by the pkg.old handler: \\['pkg.old'\\]$"]
+
+[[claim]]
+id = "import-cycle-bites-in-one-order-only"
+ref = "safety-net.md"
+statement = "A cycle between two modules can import fine in one order and fail with 'partially initialized module' in the other, so a test suite whose conftest imports the package first never sees it; importing each module alone in a subprocess does."
+probe = "import-cycle-order"
+cmd = ["python", "p.py"]
+expect_output = ["^import pkg.a: ImportError: cannot import name 'LIMIT' from partially initialized module", "^import pkg.b: ok$"]
+
+[[claim]]
+id = "set-order-depends-on-hash-seed"
+ref = "safety-net.md"
+statement = "Iteration order of a set of strings changes with PYTHONHASHSEED while dict order does not, so a characterization test that pins output built from a set is flaky across interpreter runs."
+probe = "set-order-hash-seed"
+cmd = ["python", "p.py"]
+expect_output = ["^same set order across seeds: False$", "^same dict order across seeds: True$"]
+
+[[claim]]
+id = "method-to-property-changes-call-sites"
+ref = "pythonic.md"
+statement = "Replacing a method with a @property turns every existing call obj.total() into a TypeError, so the change needs every call site in the same commit."
+probe = "method-to-property"
+cmd = ["python", "p.py"]
+expect_output = ["^before: 3$", "^after: TypeError: 'int' object is not callable$"]
+
+[[claim]]
+id = "enum-str-leaks-member-name"
+ref = "pythonic.md"
+statement = "On Python 3.12 str() and f-strings of a plain Enum member and of a (str, Enum) mixin give 'Status.OK', not 'ok'; only StrEnum (or .value) gives the string a serializer expects. Equality with the raw string works for the mixins, not for the plain Enum."
+probe = "enum-str-value"
+cmd = ["python", "p.py"]
+expect_output = ["^Plain: str='Plain.OK' format=Plain.OK json_value='ok' equals_ok=False$", "^Mixed: str='Mixed.OK' format=Mixed.OK json_value='ok' equals_ok=True$", "^Str: str='ok' format=ok json_value='ok' equals_ok=True$"]
+
+[[claim]]
+id = "pickle-stores-the-class-path"
+ref = "transformations.md"
+statement = "A pickle stores the defining module and class name, so moving a class breaks loading of objects already stored in caches, queues and sessions."
+probe = "pickle-class-path"
+cmd = ["python", "p.py"]
+expect_output = ["^class path in the pickle: True$", "^loads after the move: ModuleNotFoundError No module named 'pkg.models'$"]
+
+[[claim]]
+id = "star-import-hides-callers-from-grep"
+ref = "transformations.md"
+statement = "A caller that reaches a function through a package __init__ star re-export never mentions the defining module, so a search for the module path misses it."
+probe = "star-import-hides-callers"
+cmd = ["python", "p.py"]
+expect_output = ["^x$", "^grep for the defining module finds the consumer: False$"]
+
+
+[probes."dataclass-unhashable"]
+"p.py" = '''
+from dataclasses import dataclass
+
+
+class Plain:
+    def __init__(self, x):
+        self.x = x
+
+
+@dataclass
+class Data:
+    x: int
+
+
+@dataclass(frozen=True)
+class Frozen:
+    x: int
+
+
+print("plain hashable:", hash(Plain(1)) is not None)
+try:
+    hash(Data(1))
+    print("dataclass hashable: True")
+except TypeError as exc:
+    print("dataclass hashable: False,", exc)
+print("frozen hashable:", hash(Frozen(1)) is not None)
+print("plain equal:", Plain(1) == Plain(1), "dataclass equal:", Data(1) == Data(1))
+'''
+
+[probes."enum-str-value"]
+"p.py" = '''
+from enum import Enum, StrEnum
+
+
+class Plain(Enum):
+    OK = "ok"
+
+
+class Mixed(str, Enum):
+    OK = "ok"
+
+
+class Str(StrEnum):
+    OK = "ok"
+
+
+for cls in (Plain, Mixed, Str):
+    member = cls.OK
+    print(f"{cls.__name__}: str={str(member)!r} format={member:}", f"json_value={member.value!r} equals_ok={member == 'ok'}")
+'''
+
+[probes."import-cycle-order"]
+"p.py" = '''
+import subprocess
+import sys
+
+for module in ("pkg.a", "pkg.b"):
+    proc = subprocess.run([sys.executable, "-c", f"import {module}"], capture_output=True, text=True)
+    status = "ok" if proc.returncode == 0 else proc.stderr.strip().splitlines()[-1]
+    print(f"import {module}: {status}")
+'''
+"pkg/__init__.py" = '''
+'''
+"pkg/a.py" = '''
+from pkg import b
+
+LIMIT = 10
+
+
+def check(x):
+    return b.clamp(x)
+'''
+"pkg/b.py" = '''
+from pkg.a import LIMIT
+
+
+def clamp(x):
+    return min(x, LIMIT)
+'''
+
+[probes."logger-name-follows-module"]
+"p.py" = '''
+import logging
+
+from pkg import new, old
+
+records = []
+
+
+class Collect(logging.Handler):
+    def emit(self, record):
+        records.append(record.name)
+
+
+logging.getLogger("pkg.old").addHandler(Collect())
+old.work()
+new.work()
+print("records captured by the pkg.old handler:", records)
+'''
+"pkg/__init__.py" = '''
+'''
+"pkg/new.py" = '''
+import logging
+
+log = logging.getLogger(__name__)
+
+
+def work():
+    log.warning("working")
+'''
+"pkg/old.py" = '''
+import logging
+
+log = logging.getLogger(__name__)
+
+
+def work():
+    log.warning("working")
+'''
+
+[probes."lru-cache-method"]
+"p.py" = '''
+import gc
+import weakref
+from functools import lru_cache
+
+
+class Report:
+    @lru_cache(maxsize=None)
+    def total(self):
+        return 1
+
+
+r = Report()
+r.total()
+ref = weakref.ref(r)
+del r
+gc.collect()
+print("instance alive after del:", ref() is not None)
+'''
+
+[probes."method-to-property"]
+"p.py" = '''
+class Before:
+    def total(self):
+        return 3
+
+
+class After:
+    @property
+    def total(self):
+        return 3
+
+
+print("before:", Before().total())
+try:
+    print("after:", After().total())
+except TypeError as exc:
+    print("after: TypeError:", exc)
+'''
+
+[probes."mock-patch-target"]
+"p.py" = '''
+from unittest import mock
+
+from pkg import report
+
+with mock.patch("pkg.clock.now", return_value="fake"):
+    print("patched on the defining module:", report.header())
+with mock.patch("pkg.report.now", return_value="fake"):
+    print("patched where it is looked up:", report.header())
+'''
+"pkg/__init__.py" = '''
+'''
+"pkg/clock.py" = '''
+def now():
+    return "real"
+'''
+"pkg/report.py" = '''
+from pkg.clock import now
+
+
+def header():
+    return now()
+'''
+
+[probes."pickle-class-path"]
+"p.py" = '''
+import pickle
+import shutil
+import sys
+from pathlib import Path
+
+from pkg.models import Invoice
+
+blob = pickle.dumps(Invoice(10))
+print("class path in the pickle:", b"pkg.models" in blob)
+shutil.move("pkg/models.py", "pkg/billing.py")
+sys.modules.pop("pkg.models")
+try:
+    pickle.loads(blob)
+    print("loads after the move: ok")
+except (ModuleNotFoundError, AttributeError) as exc:
+    print("loads after the move:", type(exc).__name__, exc)
+'''
+"pkg/__init__.py" = '''
+'''
+"pkg/models.py" = '''
+class Invoice:
+    def __init__(self, total):
+        self.total = total
+'''
+
+[probes."set-order-hash-seed"]
+"p.py" = '''
+import os
+import subprocess
+import sys
+
+code = "print(list({'alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta', 'eta', 'theta'}))"
+orders = []
+for seed in ("0", "1", "2"):
+    env = dict(os.environ, PYTHONHASHSEED=seed)
+    orders.append(subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True).stdout.strip())
+    print(f"seed {seed}: {orders[-1]}")
+print("same set order across seeds:", len(set(orders)) == 1)
+code = "print(list({'alpha': 1, 'beta': 2, 'gamma': 3}))"
+dicts = {subprocess.run([sys.executable, "-c", code], env=dict(os.environ, PYTHONHASHSEED=s), capture_output=True, text=True).stdout.strip() for s in ("0", "1", "2")}
+print("same dict order across seeds:", len(dicts) == 1)
+'''
+
+[probes."star-import-hides-callers"]
+"consumer.py" = '''
+import pkg
+
+print(pkg.render())
+'''
+"p.py" = '''
+import subprocess
+import sys
+
+print(subprocess.run([sys.executable, "consumer.py"], capture_output=True, text=True).stdout.strip())
+hits = subprocess.run(["grep", "-rl", "core", "consumer.py"], capture_output=True, text=True).stdout.strip()
+print("grep for the defining module finds the consumer:", bool(hits))
+'''
+"pkg/__init__.py" = '''
+from .core import *  # noqa: F403
+'''
+"pkg/core.py" = '''
+__all__ = ["render"]
+
+
+def render():
+    return "x"
+'''
