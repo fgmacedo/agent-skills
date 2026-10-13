@@ -1,91 +1,62 @@
 ---
 name: python-typing
 description: >
-  Python static typing with mypy, pyright, basedpyright and ty: fixing type-checker errors,
-  making several checkers agree, typing dynamic code (descriptors, metaclasses, decorators,
-  ParamSpec, overloads, generic defaults, dataclass_transform, TypedDict, Protocols, mixins),
-  which suppression comment to write when several checkers run, TypeIs/TypeGuard narrowing,
-  checker configuration (per-module strict, porting pyright config to ty, CI and pre-commit)
-  and typed libraries (py.typed, pyright --verifytypes). Use whenever a
-  Python task touches type annotations or type-checker output, for example "reveal_type shows
-  Any", "decorator loses the signature", `# type: ignore`, `[attr-defined]`, `[type-arg]`,
-  `[no-untyped-def]`, `reportAttributeAccessIssue`, "Cannot access attribute",
-  `unresolved-attribute`, `invalid-argument-type`, "Unused \"type: ignore\" comment",
-  `warn_unused_ignores`, `reportUnnecessaryTypeIgnoreComment`, or a
-  request to add type hints, enable strict mode, or adopt ty.
+  Python static typing with mypy, pyright, basedpyright and ty. Use when a task touches type
+  annotations or type-checker output: fixing checker errors, making several checkers agree,
+  typing dynamic code (decorators, descriptors, metaclasses, overloads, Protocols, TypedDict),
+  adding or removing `# type: ignore` / `pyright: ignore` / `ty: ignore`, TypeIs/TypeGuard,
+  strict mode, adopting ty, or shipping a typed library.
 license: MIT
 ---
 
 # Python typing: mypy, pyright, ty
 
-A typing fix is done when **every checker the project targets sees the precise type at the
-call sites users write**, proven with `assert_type` probes. "The reported errors are gone" is
-not done: mypy and ty silently turn many unfinished fixes into `Any` / `Unknown`, which reports
-nothing.
+A typing fix is done when **every target checker sees the precise type at the call sites users
+write**, proven with `assert_type` probes. "The errors are gone" is not done: mypy and ty
+silently turn unfinished fixes into `Any` / `Unknown`.
 
 **Do not report done until all four hold:**
 
-1. Every public module-level function and public method in the modules you edited that
-   callers reach through the requested API has a return annotation; a missing one is `Any` in
-   mypy and `Unknown` in ty. Check mechanically, not by eye. Annotate those precisely.
-   Leave private helpers and nested closures alone; an `Any` annotation added only to silence
-   a coverage check is not a fix.
+1. Every public function and method you edited that callers reach through the requested API
+   has a precise return annotation (unannotated is `Any` in mypy, `Unknown` in ty; only pyright
+   infers). Leave private helpers and closures alone; `Any` added to satisfy coverage is not a fix.
 2. A probe asserts the result type of each API the request names, plus one line that must
-   error, and is clean under every target checker (step 4).
+   error, and is clean under every target checker.
 3. Each suppression you added was reported as needed by a checker, and none is unused.
 4. The project's own checker invocations and tests pass.
 
-Verified with mypy 2.4.0, pyright 1.1.414, basedpyright 1.40.2, ty 0.0.86 (beta), Python 3.14,
-Oct 2026. Every non-obvious fact in `references/` is backed by an executable probe.
+Verified with mypy 2.4.0, pyright 1.1.414, basedpyright 1.40.2, ty 0.0.86, Python 3.14.
 
 ## Workflow
 
-### 0. Detect how the project checks types
+### 1. Detect and baseline
 
-Find the checkers, their config, the target Python of each checker and the exact commands
-pre-commit and CI run. Use those commands, with the project's interpreter, for every check.
+Use the checkers, config and exact commands that pre-commit and CI run, with the project's
+venv (`mypy --python-executable .venv/bin/python`, `pyright --pythonpath .venv/bin/python`,
+`ty check --python .venv`). Record error counts by rule before editing.
 
-- Config precedence: `pyrightconfig.json` silently replaces `[tool.pyright]`; `ty.toml`
-  replaces `[tool.ty]`; an unknown `[tool.ty]` key makes ty exit 2.
-- Target version: mypy and pyright use `python_version` / `pythonVersion`, else the
-  interpreter; **ty uses the lower bound of `requires-python`**. The same import can pass two
-  checkers and fail the third.
-- Point checkers at the project venv: `mypy --python-executable .venv/bin/python`,
-  `pyright --pythonpath .venv/bin/python`, `ty check --python .venv`.
+- `pyrightconfig.json` replaces `[tool.pyright]`; `ty.toml` replaces `[tool.ty]`; an unknown
+  `[tool.ty]` key makes ty exit 2.
+- mypy and pyright target `python_version` / `pythonVersion`, else the interpreter; **ty
+  targets the lower bound of `requires-python`**.
 
-### 1. Baseline
+### 2. Fix with the first rung that works
 
-Run every target checker as the project does and record counts by rule before editing.
-
-### 2. Classify each error
-
-| class | signal | action |
-|---|---|---|
-| real bug | runtime would fail or misbehave | fix the code |
-| loose annotation | missing return type, `Any`, bare `Callable`, `dict` without params | tighten the annotation |
-| dynamic pattern | descriptor, metaclass, decorator, injected attribute, function attribute | `references/patterns.md` recipe |
-| checker divergence | one checker disagrees on correct code | `references/cross-checker.md` |
-| stub gap | third-party module untyped or wrong | stub package, local `.pyi`, narrow override |
-| config | wrong target version, interpreter, include paths, mode | fix config, not code |
-
-### 3. Fix with the first rung that works
-
-1. Fix the code or the annotation. **Annotate the return type of every function you touch
-   whose result callers use**: mypy gives `Any` and ty gives `Unknown` for unannotated returns;
-   only pyright infers.
+1. The code or the annotation. Real bugs get fixed; config errors get fixed in config.
 2. A precise construct: `@overload`, `Protocol`, `TypeVar` / `ParamSpec`, `Self`, `TypeIs`,
-   generics with defaults, descriptor `__get__` overloads.
-3. Declarations under `if TYPE_CHECKING:` for members created at runtime (metaclass
-   properties, a type-only `__get__`, a stricter `TypeVar`). Runtime stays unchanged.
-4. A `.pyi` stub next to the module.
+   generic defaults, descriptor `__get__` overloads (recipes: `references/patterns.md`).
+3. Declarations under `if TYPE_CHECKING:` for members created at runtime. Runtime unchanged.
+4. A `.pyi` stub next to the module, or a stub package for a third-party gap.
 5. One `cast` inside one helper, never at call sites.
 6. A narrow, coded suppression on the exact line (see Suppressions).
 
-Keep the change typing-only: no new runtime validation, no behavior changes, no overloads on
-code paths the request does not reach. Fix `no-any-return` from `json.loads` with an annotated
-local (`data: dict[str, str] = json.loads(raw)`).
+When checkers disagree on correct code, see `references/cross-checker.md`. Keep the change
+typing-only: no runtime validation, no behavior changes, nothing on code paths the request
+does not reach. Fix `no-any-return` from `json.loads` with an annotated local
+(`data: dict[str, str] = json.loads(raw)`). Prefer `object`, `type[C]`, `Callable[..., R]` or
+a `TypeVar` to `Any`.
 
-### 4. Prove it with a probe
+### 3. Prove it with a probe
 
 Write a throwaway `_probe.py` **inside the project root** and check it with every target
 checker:
@@ -104,25 +75,18 @@ def probe() -> None:                         # annotated: mypy skips unannotated
     w.missing_attribute                      # must error: proves w is not Any
 ```
 
-- `assert_type` is exact: `assert_type(1, int)` fails (`Literal[1]`); ty narrows
-  `x: float = 1.5` to a literal-ish `float*`. Assert on calls to annotated functions.
-- Assert `await coro()` results; un-awaited coroutines are `Coroutine` in mypy and
-  `CoroutineType` in pyright and ty.
-- Runtime tests do not prove static types. Keep the probe out of the commit unless the
-  project has type tests (`references/library-authoring.md`).
+- `assert_type` is exact (`assert_type(1, int)` fails on `Literal[1]`): assert on calls to
+  annotated functions and on `await coro()` results.
+- Runtime tests do not prove static types. Delete the probe unless the project keeps type
+  tests (`references/library-authoring.md`).
 
-### 5. Finish
+### 4. Finish
 
-1. Re-run every target checker with the project's own invocation, plus the tests, and walk the
-   four "done" conditions at the top.
-2. List the suppressions you added and prove each one: run with unused-ignore checks on
-   (mypy `--warn-unused-ignores`, pyright `reportUnnecessaryTypeIgnoreComment`, ty reports by
-   default) and delete what they flag.
-   `git diff -U0 | grep -E '^\+.*#\s*(type|pyright|ty):\s*ignore'`
-3. Check `git diff` for `Any` you introduced; replace with `object`, `type[C]`,
-   `Callable[..., R]` or a `TypeVar` where possible.
-4. Make edits with the editor tool and confirm them in `git diff`; BSD `sed -i` (macOS)
-   needs `''` and fails otherwise.
+Run the project's checker commands and tests, then walk the four "done" conditions. Prove each
+added suppression with unused-ignore checks on (mypy `--warn-unused-ignores`, pyright
+`reportUnnecessaryTypeIgnoreComment`, ty by default) and delete what they flag; list them with
+`git diff -U0 | grep -E '^\+.*#\s*(type|pyright|ty):\s*ignore'`. Edit with the editor tool:
+BSD `sed -i` (macOS) needs `''`.
 
 ## Suppressions
 
