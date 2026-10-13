@@ -9,6 +9,13 @@ Usage:
 The census is regex-based so it runs on any interpreter and on code that does
 not parse as Python 3 yet. Counts are occurrences, not proofs: a category at
 zero means the idiom is gone, a non-zero count is a worklist.
+
+Known regex-level false positives: exception_message matches any
+`error.message` even when the object is not an exception (jsonschema's
+ValidationError has a real `.message`); apply_builtin and tuple_param_unpack
+skip `def apply(` and `param=()` but a call to a method named apply still
+counts. Pass --ignore CATEGORY[,CATEGORY] once you have checked them, in the
+census and in the --check gate alike.
 """
 from __future__ import print_function
 
@@ -31,7 +38,7 @@ PATTERNS = [
     ("octal_literal", r"(?<![\w.])0[0-7]+\b(?!\.)", "0o755"),
     ("long_literal", r"\b\d+[lL]\b", "drop the L suffix"),
     ("ur_string", r"\b[uU][rR]['\"]", "r'' under unicode_literals, or u'\\\\d'"),
-    ("tuple_param_unpack", r"^\s*(def\s+\w+|lambda)\s*\([^)]*\([^)]*\)", "unpack inside the body"),
+    ("tuple_param_unpack", r"^\s*(def\s+\w+|lambda)\s*\([^)]*(?<!=)(?<!= )\([^)]*\)", "unpack inside the body"),
     # builtins and names removed in Python 3
     ("basestring", r"\bbasestring\b", "six.string_types or str"),
     ("unicode_call", r"\bunicode\(", "six.text_type or str"),
@@ -40,7 +47,7 @@ PATTERNS = [
     ("raw_input", r"\braw_input\(", "input"),
     ("unichr", r"\bunichr\(", "chr"),
     ("reduce_builtin", r"(?<![\w.])reduce\(", "functools.reduce"),
-    ("apply_builtin", r"(?<![\w.])apply\(", "f(*args, **kw)"),
+    ("apply_builtin", r"(?<![\w.])(?<!def )apply\(", "f(*args, **kw)"),
     ("execfile", r"\bexecfile\(", "exec(open(f).read())"),
     ("file_builtin", r"(?<![\w.])file\(", "open()"),
     ("buffer_builtin", r"(?<![\w.])buffer\(", "memoryview"),
@@ -203,9 +210,16 @@ def main(argv=None):
     parser.add_argument("--check", metavar="BASELINE_JSON")
     parser.add_argument("--json", action="store_true", help="print the census as JSON")
     parser.add_argument("--all", action="store_true", help="include informational categories")
+    parser.add_argument("--ignore", metavar="CATEGORY[,CATEGORY]", default="",
+                        help="categories checked by hand and dropped from the report and the gate")
     args = parser.parse_args(argv)
 
     result = census(args.roots)
+    for name in filter(None, args.ignore.split(",")):
+        if name not in result["categories"]:
+            parser.error("unknown category: %s" % name)
+        result["categories"][name]["occurrences"] = 0
+        result["categories"][name]["files"] = 0
     if args.json:
         print(json.dumps(result, indent=1, sort_keys=True))
     else:

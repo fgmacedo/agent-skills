@@ -101,7 +101,44 @@ python3 -bb -X dev -X warn_default_encoding -W error::DeprecationWarning -m pyte
 | py2 runtime idioms | `python2 -3 -Werror` on the py2 CI leg | a `DeprecationWarning` fires |
 | Single source (optional) | `modernize --enforce` | any fixer would change a file |
 
+| Undefined names on target | `pyflakes SRC` or `ruff check --select F821 SRC` under the target interpreter | `unicode`, `basestring`, `xrange`, `long`, `unichr`, `reduce` on any line, covered or not |
+| Uncovered risk lines | `python3 scripts/uncovered_risk_lines.py coverage.json` | printed list is the manual review list; the gate is that it is reviewed, not empty |
+| Coverage floor per leg | `coverage report --fail-under=N` on both legs, `N` raised in every PR until 100 | a leg drops below its floor |
+
 `pytest-quarantine` 2.0 (2019) supports 2.7 and pytest 4.6, so the same ratchet works on both legs. There is no plugin named "pytest-ratchet". GitHub Actions `continue-on-error: true` is how an allowed-to-fail job is declared; it renders poorly in the PR checks list, so publish the pass count as a job summary.
+
+### Coverage to 100% on both legs
+
+Single-source code has lines only one interpreter runs. coverage.py expands environment variables in `.coveragerc` (`${VAR-default}` syntax works on 5.5 and 7.x), so one file serves both legs:
+
+```ini
+[report]
+fail_under = 100
+show_missing = True
+exclude_lines =
+    pragma: no cover
+    pragma: py${COVERAGE_EXCLUDE_PY-0} only
+    raise NotImplementedError
+    def __repr__
+```
+
+Tag the line `# pragma: py2 only` or `# pragma: py3 only`. The 2.7 job sets `COVERAGE_EXCLUDE_PY=3`, the target job sets `COVERAGE_EXCLUDE_PY=2`; unset expands to `py0 only` and excludes nothing. `coverage-conditional-plugin` does the same with less typing but is py3-only, so it cannot serve while the 2.7 leg exists. When diffing executed-line sets between legs, expect about fifty lines each way of tooling noise (coverage 5.5 and 7.x attribute `def` lines and docstrings differently); filter those before reading the diff.
+
+### `-W error::DeprecationWarning` with the last-2.7 chain
+
+The flag is unreachable on 3.12+ without filters: Werkzeug 1.0.1 uses `ast.Str` (most tests fail at routing), itsdangerous 1.1.0 calls `utcfromtimestamp`, SQLAlchemy 1.4 raises `RemovedIn20Warning` (a `DeprecationWarning` subclass) through its "uber warning", and Flask-SQLAlchemy 2.5.1 raises `FSADeprecationWarning` unless `SQLALCHEMY_TRACK_MODIFICATIONS` is set explicitly. pytest's `filterwarnings` ini entries take precedence over python's `-W` (verified on pytest 4.6.11 and 8.x), so keep the flag on the command line and scope each filter to the third-party line that raises it:
+
+```ini
+[pytest]
+filterwarnings =
+    ignore:ast\.Str is deprecated:DeprecationWarning:werkzeug\.routing
+    ignore:Attribute s is deprecated:DeprecationWarning
+    ignore:Constant\.__init__:DeprecationWarning
+    ignore:datetime\.datetime\.utcfromtimestamp\(\) is deprecated:DeprecationWarning:itsdangerous\.timed
+    ignore::sqlalchemy.exc.RemovedIn20Warning
+```
+
+Never `ignore::DeprecationWarning` unscoped: it hides the removals in your own code. Python 3.14 is out of reach for this chain because `ast.Str` is removed there; it becomes a go/no-go after the Phase 6 framework upgrade.
 
 Dead or stale, do not recommend: `caniusepython3` (unmaintained since 2021), `pylint --py3k` (removed in pylint 2.11; only pylint 1.9.5 under 2.7 still has it), `unicode-nazi` (2011), `flake8-2020` (archived, only checks `sys.version` slicing), Bowler (archived 2025).
 
@@ -119,7 +156,10 @@ The single-source window must stay inside these pins. Upgrade to them on the py2
 | MarkupSafe | 1.1.1 (py2 side); pin 2.0.1 on the py3 side, 2.1 removed `soft_unicode` which Jinja2 2.11 imports | 2.0 | 3.13, measured |
 | itsdangerous | 1.1.0 | 2.0 | 3.13, measured |
 | click | 7.1.2 | 8.0 | 3.13, measured |
-| Flask-SQLAlchemy | 2.5.1 | 3.0 | 3.13, measured |
+| Flask-SQLAlchemy | 2.5.1 | 3.0 | 3.13, measured. Two incompatibilities with SQLAlchemy 1.4.54: `scoped_session.get_bind` forwards a `bind` kwarg that `SignallingSession.get_bind` rejects (call `get_bind` on `session()`, not on the proxy); a secondary-table `DELETE` of a missing row raises `StaleDataError` because 1.4 checks rowcount where 1.3 did not, and the collection remove event fires before `list.remove` raises `ValueError`, so "remove then swallow `ValueError`" code still queues the delete (check membership first). Set `SQLALCHEMY_TRACK_MODIFICATIONS` explicitly or `FSADeprecationWarning` fires |
+| Flask-Principal | 0.4.0 | none | needs `blinker==1.4`; newer blinker removed `_utilities.contextmanager` |
+| blinker | 1.4 (with Flask-Principal); 1.9 otherwise | | |
+| aniso8601 | 9.0.1 | 10.0 changed date parsing (a test-visible difference, pin it) | |
 | Flask-RESTful | 0.3.10 | none yet (still declares 2.7) | classifiers to 3.8 |
 | flask-restx | 0.5.1 | 1.0 | classifiers to 3.8 |
 | Flask-Login | 0.5.0 | 0.6 | classifiers to 3.7 |
