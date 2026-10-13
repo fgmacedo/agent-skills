@@ -65,7 +65,7 @@ A phased workflow for moving a Python 2.7 codebase to Python 3 without a long-li
 
 **Trigger phrases:** "port to Python 3", "Python 2.7", "futurize", "2to3", "six", "unicode_literals", "basestring", "which Python version should we target"
 
-**References included:** catalog of every 2→3 change classified as mechanical or judgment, tooling and pin tables, per-version removal table, case studies (Instagram, Dropbox, Yelp, Mercurial), plus a py2-idiom census script and a compile gate script.
+**References included:** catalog of every 2→3 change classified as mechanical or judgment, tooling and pin tables, per-version removal table, case studies (Instagram, Dropbox, Yelp, Mercurial), plus a py2-idiom census script, a compile gate script and an uncovered-risk-lines script that turns a coverage report into the manual review list.
 
 ### removing-dead-code
 

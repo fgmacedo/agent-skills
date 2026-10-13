@@ -35,7 +35,7 @@ Done when: the environment is reproducible, CI publishes coverage and fails on r
 
 1. **Freeze what production really runs.** `pip freeze` inside the production image becomes a versioned lockfile. Base images maintained elsewhere often install unpinned packages that the repo never names (SQLAlchemy, DB drivers, memcache clients). Those are dependencies too. If the base image belongs to another team, build your own from `python:2.7.18-slim` plus the lockfile now: the py3 image needs the same layout, and the switch stops depending on their calendar.
 2. **Pick the target version** with the decision rule in `references/target-version.md`. Write it into the project's README and agent instructions file in the same PR.
-3. **Coverage as a gate.** Run the suite with `coverage` (5.5 on py2) in CI, publish the number, set `fail_under` to the current value. Start collecting coverage from production or staging now (see removing-dead-code for the multi-service design); the window must be long before Phase 2 needs it.
+3. **Coverage as a gate.** Run the suite with `coverage` (5.5 on py2, 7.x on py3) in CI, publish the number, set `fail_under` to the current value. Single-source code has lines only one interpreter can execute (`if six.PY2:`, an `except ImportError` fallback for a backport), so exclude them per leg with `# pragma: py2 only` / `# pragma: py3 only` and the `.coveragerc` in `references/tooling.md`, section 5; otherwise the number is capped below 100 and the gate cannot ratchet to the end. Start collecting coverage from production or staging now (see removing-dead-code for the multi-service design); the window must be long before Phase 2 needs it.
 4. **Golden tests for cross-version invariants.** Record outputs under py2 as fixtures and assert byte-equality under both interpreters: IDs derived from hashes or `sys.maxint`, signed tokens, encrypted payloads, cache keys, serialized exports (JSON, CSV, XLSX, PDF), URLs built from user data, anything parsed by another system. These are the tests that catch `b'...'` leaks and rounding drift before a deploy does.
 5. **One-day spike.** Build a py3 image on the target with the py2-compatible framework chain pinned (`references/tooling.md`, section 6) and import the chain in isolation, since the application still has py2 syntax at this point: `python3 -c "import flask, flask_sqlalchemy, sqlalchemy, <driver>, <rest layer>, <event loop lib>"` (Django: `django.setup()` plus `migrate` against sqlite) plus a minimal app factory smoke test. Expect the ceiling to differ by stack: the Flask 1.1 chain runs on 3.13, Django 1.11 stops at 3.9 (`references/tooling.md`, section 6). Check wheels for the target with `pip download --only-binary=:all: --python-version 3XY --platform manylinux2014_x86_64 -r requirements.txt` before building; a C extension without a wheel for the target either builds from source in the image or forces a split pin (step 6). If the chain imports on the target, the cutover changes only the interpreter. If it does not, cut over on the newest version it runs on and make the framework upgrade the next project. One variable at a time. The `-t tests` stage of the compile gate only becomes meaningful after Phase 1.
 6. **Dependency inventory.** For every package: last version with 2.7, first without, whether the pinned version imports on the target, and whether a wheel exists for the target. Internal packages without py3 builds go to their owners now; they are the calendar risk. Archived upstreams get a fork (`references/tooling.md`, section 7). A package that cannot straddle both interpreters (its last py2 release has no build for the target: pandas 0.24, numpy 1.16, often psycopg2 2.8 and mysqlclient 1.4 without source builds) gets a **split pin** by environment marker, `pkg==old; python_version<"3"` and `pkg==new; python_version>="3"`, code restricted to the API subset both versions share, and golden tests for its outputs. From this point: no new package without py3 support.
@@ -70,7 +70,13 @@ Done when: the py3 job is required and green, and golden tests produce identical
 1. Add a CI job on the target with `continue-on-error: true`, running `python3 -bb -X warn_default_encoding -W error::DeprecationWarning -m pytest`, plus a known-failures list (`pytest-quarantine`, or an allowlist file with `xfail_strict = true`). A listed test that starts passing must leave the list; an unlisted test that fails breaks the job. Publish the pass count in the job summary.
 2. Milestones, in order: parseable, importable (`pytest --collect-only` clean), functional parity (pass count rising to 100%), job required.
 3. Work the list with the ratchet loop (below). Bytes/str discipline: decode at the input edge, text inside, encode at the output edge. Audit hashing, crypto, base64, ctypes, subprocess and Redis call sites against catalog B even if no test fails there.
-4. Optional but effective: mypy or pyright on the modules with the most `.encode`/`.decode` calls; `bytes` vs `str` is a type error the checker sees.
+4. **Cover what the ratchet cannot see.** Every static gate (census, compile gate, pyflakes, `-W error`) is clean long before behaviour is equal: the interpreters diverge silently on lines no test runs. Three gates on the target, in this order:
+   - `pyflakes` (or `ruff check --select F821`) on the target finds `unicode`, `basestring`, `xrange`, `long` and `unichr` on any line, covered or not; a clean run is a result worth recording.
+   - `python3 scripts/uncovered_risk_lines.py coverage.json` lists the uncovered lines that carry a risky idiom (`str(`, `sorted(`, `hasattr(x, '__iter__')`, `isinstance(x, str)`, `dict(`, `.encode`/`.decode`, `hash(`, `/`); that intersection is the manual review list, and in a library of 7k lines it was 8 lines out of 253 uncovered, one of them a real divergence.
+   - Raise coverage to 100% with tests that assert payload, status and persisted state, not only "does not raise". In the same library the 9% that no test ran hid five divergences none of the static gates reported (`sorted` with `None` keys, `hasattr(x, '__iter__')` as "is a collection", `dict(MultiDict)`, `isinstance(x, str)` on values that are `unicode` on 2.7, `logger.warn`) and six bugs present on both interpreters, one of them data corruption. Use the coverage loop below.
+   For a forked library consumed by one application, the coverage that matters is the consumer's: run the application's suite with `--cov=<library>` and diff the executed lines against the library's own report; what the application exercises and the library suite does not is the review list.
+5. `-W error::DeprecationWarning` on the target is unreachable without filters while the chain sits on its last-2.7 releases (Werkzeug 1.0.1 `ast.Str`, itsdangerous 1.1.0 `utcfromtimestamp`, SQLAlchemy 1.4 `RemovedIn20Warning`, Flask-SQLAlchemy 2.5.1 `FSADeprecationWarning`). Add pytest `filterwarnings` entries scoped by message and module, never a blanket `ignore::DeprecationWarning`; the list and the precedence rule are in `references/tooling.md`, section 5.
+6. Optional but effective: mypy or pyright on the modules with the most `.encode`/`.decode` calls; `bytes` vs `str` is a type error the checker sees.
 
 ## Phase 5: cutover (short-lived branch, days)
 
@@ -123,6 +129,19 @@ remove the test from the list; commit
 
 Batch: one test file per PR. Stop: the list is empty. If the same boundary explains many failures, fix the boundary once and remove every test it unblocks in one commit.
 
+### Coverage loop (Phase 4)
+
+```
+coverage json; python3 scripts/uncovered_risk_lines.py coverage.json   # review list first
+pick the module with the lowest coverage
+for each uncovered branch:
+    write the test that asserts the observable result (payload, status, persisted row), not only "no exception"
+    run it on py2 and py3; a test that passes on one and fails on the other has found a divergence: fix per the catalog, at the boundary
+commit tests and fixes per logical change; raise fail_under to the new floor on both legs
+```
+
+Batch: one module per commit. Stop: `fail_under = 100` on both legs with the per-interpreter pragmas. To parallelize, partition by file ownership: each agent owns disjoint source and test files and commits nothing; the coordinator integrates, runs both interpreters once, and commits per logical change (`git add -p` when one file carries two changes). Four agents covered 117 tests and 11 fixes in about seven minutes of wall-clock on the 7k-line library above.
+
 ### Dead-code loop (Phase 2)
 
 Candidate, then the proof required for its category, then removal, suite, commit with the proof in the message, soak before the next batch. The procedure and the proof table are in the removing-dead-code skill.
@@ -174,7 +193,7 @@ Everything else is decided by the loop with the catalog procedure.
 | 1 parseable | `futurize --stage1 -f <fixer>` under 2.7 | `py3_compile_gate.sh` zero errors, required in CI |
 | 2 shrink | removing-dead-code skill | candidates removed with proof, soaked |
 | 3 modernize | remaining stage1 fixers; `six`; `python2 -3 -Werror::DeprecationWarning -Qwarnall -R -tt`; dep upgrades one per PR; split pins for packages that cannot straddle | census zero; py2 suite green under those flags; deps at last py2 versions |
-| 4 ratchet | py3 job with `-bb -W error::DeprecationWarning`; known-failures list; ratchet loop | py3 job required and green; golden tests equal |
+| 4 ratchet | py3 job with `-bb -W error::DeprecationWarning`; known-failures list; ratchet loop; pyflakes on target; `uncovered_risk_lines.py`; coverage loop | py3 job required and green; golden tests equal; `fail_under = 100` on both legs |
 | 5 cutover | two images per commit; per-workload image switch; cache namespacing; canary by route | 7-day observation at baseline |
 | 6 cleanup | `pyupgrade --py3XX-plus`; ruff `UP`; drop py2 leg | permanent `-W error::DeprecationWarning` |
 
@@ -191,6 +210,8 @@ Everything else is decided by the loop with the catalog procedure.
 - **Cutting over without handling shared pickles.** py2 and py3 pods reading the same memcached keys will crash on each other's data. Namespace or flush.
 - **Trusting `compileall` on 3.14.** `except X, e:` parses there. Gate with ruff or 3.13.
 - **Reading `six.moves` as the end state.** It is a window shim; Phase 6 removes it.
+- **Declaring parity when the static gates are clean.** Census, compile gate, pyflakes and `-W error` say nothing about lines no test runs, and that is where `hasattr(__iter__)`, `dict(MultiDict)` and `isinstance(x, str)` diverge silently. The coverage loop is the gate.
+- **A blanket `ignore::DeprecationWarning`.** It hides the next version's removals in your own code. Scope every filter by message and module to the third-party line that raises it.
 
 ## Checklist
 
@@ -206,7 +227,8 @@ Everything else is decided by the loop with the catalog procedure.
 - [ ] Dead code removed with proof (sibling skill)
 - [ ] Census zero outside `six`; py2 suite green under `-3 -Werror::DeprecationWarning -Qwarnall -R -tt`
 - [ ] Dependencies at their last py2-compatible versions, each deployed
-- [ ] py3 job required and green with `-bb -W error::DeprecationWarning`
+- [ ] py3 job required and green with `-bb -W error::DeprecationWarning`; warning filters scoped by message and module
+- [ ] pyflakes clean on the target; uncovered risk lines reviewed; `fail_under = 100` on both legs with per-interpreter pragmas
 - [ ] Both images built from one commit; cache keys namespaced; rollback rehearsed in staging
 - [ ] Every workload on py3 for 7 days at baseline error rate
 - [ ] `pyupgrade`/ruff cleanup landed; py2 leg deleted; `-W error::DeprecationWarning` permanent
