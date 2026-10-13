@@ -138,6 +138,10 @@ Candidate, then the proof required for its category, then removal, suite, commit
 | iteration yields nothing the second time | exhausted `map`/`filter`/`zip` | materialize once with `list()` |
 | `RuntimeError: dictionary changed size during iteration` | deleting while iterating a view | iterate over `list(d)` |
 | `TypeError: '<' not supported between instances of 'NoneType' and 'int'` | mixed-type or `None` sort keys | `key=lambda x: (x is None, x)`; normalize types |
+| a string is searched character by character; `in` on an attribute matches substrings | `hasattr(x, '__iter__')` used as "is a collection" (`str` has `__iter__` on py3 only) | `isinstance(x, (list, tuple, set))`, or exclude `six.string_types` explicitly |
+| query-string or form values arrive as one-element lists on 2.7 and scalars on py3 | `dict(MultiDict)` | `multidict.to_dict()` (first values on both) or `to_dict(flat=False)` |
+| a setting given as a string is ignored on 2.7, honoured on py3 | `isinstance(x, str)` on a value that is `unicode` on 2.7 (`unicode_literals` in the caller) | `six.string_types` |
+| `DeprecationWarning: The 'warn' method is deprecated` under `-W error` | `logger.warn` | `logger.warning` |
 | `TypeError: unhashable type` | `__eq__` defined without `__hash__` | add `__hash__` or stop using instances as keys |
 | `TypeError: 'float' object cannot be interpreted as an integer` | true division feeding an index or `range` | `//` |
 | object always truthy; registry never populated | `__nonzero__`; `__metaclass__` attribute | `__bool__`; `six.add_metaclass` |
