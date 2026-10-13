@@ -12,6 +12,7 @@ These skills work with [Claude Code](https://docs.anthropic.com/en/docs/claude-c
 | [porting-py2-to-py3](skills/porting-py2-to-py3/) | Phased methodology for porting a Python 2.7 codebase to Python 3 while the team keeps shipping: target version, dependency strategy, CI gates, agent loops, staged rollout. |
 | [removing-dead-code](skills/removing-dead-code/) | Language-neutral removal of dead code and unused dependencies, ordered by the proof each deletion needs, with production coverage across many services. Python reference included. |
 | [python-typing](skills/python-typing/) | Static typing with mypy, pyright, basedpyright and ty: fixing checker errors, making checkers agree, typing dynamic code, suppressions, configuration and typed libraries. |
+| [refactoring-python](skills/refactoring-python/) | Safe, incremental refactoring and modernization of Python code: characterization tests first, one named transformation per commit, ports only where a dependency is external, idiomatic Python as the definition of done. |
 
 ## Installation
 
@@ -27,6 +28,7 @@ npx skills add fgmacedo/agent-skills
 npx skills add fgmacedo/agent-skills --skill python-profiling
 npx skills add fgmacedo/agent-skills --skill porting-py2-to-py3
 npx skills add fgmacedo/agent-skills --skill removing-dead-code
+npx skills add fgmacedo/agent-skills --skill refactoring-python
 ```
 
 ### List available skills
@@ -91,6 +93,22 @@ executable probe in [`claims/python-typing/`](claims/python-typing/).
 
 **Trigger phrases:** "reveal_type shows Any", "decorator loses the signature", `type: ignore`, `[attr-defined]`,
 `reportAttributeAccessIssue`, `unresolved-attribute`, "make mypy strict", "adopt ty"
+
+### refactoring-python
+
+Refactoring as a sequence of reviewable commits. Guides the agent through:
+
+1. **Map the target**: a smell census (long functions, parameter counts, nesting, god modules, I/O reached outside adapters, duplicated bodies) named with Fowler's and Kerievsky's catalog and the review lenses (cohesion, DRY, minimum shared context)
+2. **Pin behavior first**: characterization tests of the entry point, including what it mutates, writes and raises; golden masters; an oracle comparison when replacing an algorithm
+3. **Plan one transformation per commit**: Beck's tidyings, Fowler's moves, Kerievsky's patterns only with two real variants; a subject with "and" is two commits
+4. **Execute the loop**: mechanics from the catalog, suite green at every commit, revert on red, stage by path so tests never ride in a `refactor:` commit
+5. **Boundaries where they pay**: a port for I/O and proven variation, a parameter for the clock, nothing for "might vary someday"; the domain module importable with the dependency blocked; a boundary test
+6. **Pythonic pass**: dataclasses, enums, pathlib, comprehensions, context managers, each with its "behavior changes when" note and a grep that proves the idiom covers the module
+7. **Verify and report**: `check_commits.py` (every commit typed and green, no mixed commits, characterization before the first change), then a PR body that separates structure from behavior
+
+**Trigger phrases:** "refactor this", "modernize", "make it testable", "make it pythonic", "split this module", "this is a god class", "copy-pasted logic", "extract into a service", "hexagonal", "ports and adapters", "characterization test", "tidy first"
+
+**Claims:** the Python facts the skill states (patch targets after a move, dataclass hashability, enum string values, import cycles, set ordering) run as executable probes in [`claims/refactoring-python/`](claims/refactoring-python/).
 
 ## Who This Is For
 
