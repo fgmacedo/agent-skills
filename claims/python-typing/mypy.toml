@@ -1,0 +1,465 @@
+[[claim]]
+id = "mypy-strict-override-global"
+ref = "mypy.md"
+statement = "strict = true inside [[tool.mypy.overrides]] applies to every module, silently"
+probe = "mypy/strict-override-global"
+cmd = ["mypy", "--no-incremental", "pkg"]
+expect_exit = 1
+expect_output = ['pkg/legacy/m\.py:1: error: Function is missing a type annotation']
+expect_no_output = ["unused section", "Per-module sections"]
+
+[[claim]]
+id = "mypy-inline-strict-rejected"
+ref = "mypy.md"
+statement = "inline `# mypy: strict` is an error"
+probe = "mypy/inline-strict-rejected"
+cmd = ["mypy", "--no-incremental", "m.py"]
+expect_exit = 1
+expect_output = ['Setting "strict" not supported in inline configuration']
+
+[[claim]]
+id = "mypy-global-only-in-override"
+ref = "mypy.md"
+statement = "a global-only flag in an override is ignored with a warning and exit 0"
+probe = "mypy/global-only-in-override"
+cmd = ["mypy", "--no-incremental", "pkg"]
+expect_exit = 0
+expect_output = ['Per-module sections should only specify per-module flags \(warn_redundant_casts\)']
+
+[[claim]]
+id = "mypy-per-module-strict-recipe"
+ref = "mypy.md"
+statement = "listing the per-module strict flags under `module = \"pkg.core.*\"` covers pkg.core itself and leaves other packages lax"
+probe = "mypy/per-module-strict-recipe"
+cmd = ["mypy", "--no-incremental", "pkg"]
+expect_exit = 1
+expect_output = ['pkg/core/m\.py:1: error', 'pkg/core/__init__\.py:1: error', 'Found 2 errors']
+expect_no_output = ["pkg/legacy", "Per-module sections"]
+
+[[claim]]
+id = "mypy-unused-config-section"
+ref = "mypy.md"
+statement = "warn_unused_configs reports override sections matching no module as a note"
+probe = "mypy/unused-config-section"
+cmd = ["mypy", "--no-incremental", "m.py"]
+expect_exit = 0
+expect_output = ["note: unused section\\(s\\): module = \\['nomatch\\.\\*'\\]"]
+
+[[claim]]
+id = "mypy-unannotated-return-any"
+ref = "mypy.md"
+statement = "a function without a return annotation returns Any, even with annotated parameters"
+probe = "mypy/unannotated-return-any"
+cmd = ["mypy", "--no-incremental", "m.py"]
+expect_exit = 0
+expect_output = ['m\.py:9: note: Revealed type is "Any"', 'm\.py:10: note: Revealed type is "Any"']
+
+[[claim]]
+id = "mypy-unchecked-body"
+ref = "mypy.md"
+statement = "bodies of unannotated functions are skipped; assert_type there fails with a note"
+probe = "mypy/unchecked-body"
+cmd = ["mypy", "--no-incremental", "m.py"]
+expect_exit = 1
+expect_output = ['"assert_type" expects everything to be "Any" in unchecked functions', "By default the bodies of untyped functions are not checked"]
+expect_no_output = ['m\.py:5: error']
+
+[[claim]]
+id = "mypy-assert-type-exact"
+ref = "mypy.md"
+statement = "assert_type is exact: a literal is not its base type and a subtype is not its supertype"
+probe = "mypy/assert-type-exact"
+cmd = ["mypy", "--no-incremental", "m.py"]
+expect_exit = 1
+expect_output = ['m\.py:5: error: Expression is of type "Literal\[1\]", not "int"', 'm\.py:7: error: Expression is of type "int", not "object"']
+expect_no_output = ['m\.py:6:']
+
+[[claim]]
+id = "mypy-ignore-code-mismatch"
+ref = "mypy.md"
+statement = "a type: ignore with the wrong code does not suppress and names the right code"
+probe = "mypy/ignore-code-mismatch"
+cmd = ["mypy", "--no-incremental", "m.py"]
+expect_exit = 1
+expect_output = ['Error code "assignment" not covered by "type: ignore\[attr-defined\]" comment']
+
+[[claim]]
+id = "mypy-unused-ignore-and-without-code"
+ref = "mypy.md"
+statement = "warn_unused_ignores and ignore-without-code messages"
+probe = "mypy/unused-ignore"
+cmd = ["mypy", "--no-incremental", "m.py"]
+expect_exit = 1
+expect_output = ['m\.py:1: error: Unused "type: ignore" comment  \[unused-ignore\]', 'consider "type: ignore\[assignment\]" instead\)  \[ignore-without-code\]']
+
+[[claim]]
+id = "mypy-deprecated-opt-in"
+ref = "mypy.md"
+statement = "PEP 702 @deprecated usage is silent unless the deprecated code is enabled"
+probe = "mypy/deprecated-opt-in"
+cmd = ["mypy", "--no-incremental", "m.py"]
+expect_exit = 0
+
+[[claim]]
+id = "mypy-deprecated-enabled"
+ref = "mypy.md"
+statement = "with enable_error_code deprecated the call errors"
+probe = "mypy/deprecated-opt-in"
+cmd = ["mypy", "--no-incremental", "--enable-error-code", "deprecated", "m.py"]
+expect_exit = 1
+expect_output = ['function m\.f is deprecated: use g  \[deprecated\]']
+
+[[claim]]
+id = "mypy-explicit-override-not-strict"
+ref = "mypy.md"
+statement = "--strict does not enable explicit-override"
+probe = "mypy/explicit-override-opt-in"
+cmd = ["mypy", "--no-incremental", "--strict", "m.py"]
+expect_exit = 0
+
+[[claim]]
+id = "mypy-explicit-override-enabled"
+ref = "mypy.md"
+statement = "explicit-override flags overrides without @override"
+probe = "mypy/explicit-override-opt-in"
+cmd = ["mypy", "--no-incremental", "--enable-error-code", "explicit-override", "m.py"]
+expect_exit = 1
+expect_output = ['is not using @override but is overriding a method']
+
+[[claim]]
+id = "mypy-exhaustive-match-opt-in"
+ref = "mypy.md"
+statement = "non-exhaustive match is silent by default"
+probe = "mypy/exhaustive-match-opt-in"
+cmd = ["mypy", "--no-incremental", "--strict", "m.py"]
+expect_exit = 0
+
+[[claim]]
+id = "mypy-exhaustive-match-enabled"
+ref = "mypy.md"
+statement = "exhaustive-match reports the unhandled values"
+probe = "mypy/exhaustive-match-opt-in"
+cmd = ["mypy", "--no-incremental", "--enable-error-code", "exhaustive-match", "m.py"]
+expect_exit = 1
+expect_output = ['Match statement has unhandled case for values of type "Literal\[Color\.BLUE\]"']
+
+[[claim]]
+id = "mypy-strict-no-unreachable"
+ref = "mypy.md"
+statement = "--strict does not enable warn_unreachable"
+probe = "mypy/strict-no-unreachable"
+cmd = ["mypy", "--no-incremental", "--strict", "m.py"]
+expect_exit = 0
+
+[[claim]]
+id = "mypy-warn-unreachable"
+ref = "mypy.md"
+statement = "--warn-unreachable reports the dead branch"
+probe = "mypy/strict-no-unreachable"
+cmd = ["mypy", "--no-incremental", "--warn-unreachable", "m.py"]
+expect_exit = 1
+expect_output = ['m\.py:4: error: Statement is unreachable  \[unreachable\]']
+
+[[claim]]
+id = "mypy-output-json"
+ref = "mypy.md"
+statement = "-O json prints one JSON object per diagnostic with code and severity"
+probe = "mypy/output-json"
+cmd = ["mypy", "--no-incremental", "-O", "json", "m.py"]
+expect_exit = 1
+expect_output = ['^\{"file": "m\.py", "line": 1, .*"code": "assignment", "severity": "error"\}$']
+
+[[claim]]
+id = "mypy-strict-bytes-default"
+ref = "mypy.md"
+statement = "bytearray and memoryview are not bytes by default in mypy 2.x"
+probe = "mypy/strict-bytes"
+cmd = ["mypy", "--no-incremental", "m.py"]
+expect_exit = 1
+expect_output = ['incompatible type "bytearray"; expected "bytes"', 'incompatible type "memoryview\[int\]"; expected "bytes"']
+
+[[claim]]
+id = "mypy-no-strict-bytes"
+ref = "mypy.md"
+statement = "--no-strict-bytes restores the old promotion"
+probe = "mypy/strict-bytes"
+cmd = ["mypy", "--no-incremental", "--no-strict-bytes", "m.py"]
+expect_exit = 0
+
+[[claim]]
+id = "mypy-redefinition-default"
+ref = "mypy.md"
+statement = "by default a variable keeps its first inferred type"
+probe = "mypy/allow-redefinition"
+cmd = ["mypy", "--no-incremental", "m.py"]
+expect_exit = 1
+expect_output = ['m\.py:3: error: Incompatible types in assignment', 'Revealed type is "int"']
+
+[[claim]]
+id = "mypy-allow-redefinition"
+ref = "mypy.md"
+statement = "--allow-redefinition lets a local take a new type"
+probe = "mypy/allow-redefinition"
+cmd = ["mypy", "--no-incremental", "--allow-redefinition", "m.py"]
+expect_exit = 0
+expect_output = ['Revealed type is "str"']
+
+[[claim]]
+id = "mypy-untyped-decorator-strict"
+ref = "mypy.md"
+statement = "untyped-decorator comes from disallow_untyped_decorators (in --strict), not disallow_untyped_defs"
+probe = "mypy/untyped-decorator"
+cmd = ["mypy", "--no-incremental", "--strict", "m.py"]
+expect_exit = 1
+expect_output = ['Untyped decorator makes function "g" untyped  \[untyped-decorator\]']
+
+[[claim]]
+id = "mypy-untyped-decorator-not-defs"
+ref = "mypy.md"
+statement = "disallow_untyped_defs alone does not report untyped decorators"
+probe = "mypy/untyped-decorator"
+cmd = ["mypy", "--no-incremental", "--disallow-untyped-defs", "m.py"]
+expect_exit = 1
+expect_no_output = ["untyped-decorator"]
+
+[[claim]]
+id = "mypy-possibly-undefined-opt-in"
+ref = "mypy.md"
+statement = "possibly-undefined is off by default and off in --strict"
+probe = "mypy/possibly-undefined-opt-in"
+cmd = ["mypy", "--no-incremental", "--strict", "m.py"]
+expect_exit = 0
+
+[[claim]]
+id = "mypy-possibly-undefined-enabled"
+ref = "mypy.md"
+statement = "possibly-undefined reports names bound only in one branch"
+probe = "mypy/possibly-undefined-opt-in"
+cmd = ["mypy", "--no-incremental", "--enable-error-code", "possibly-undefined", "m.py"]
+expect_exit = 1
+expect_output = ['Name "y" may be undefined  \[possibly-undefined\]']
+
+
+[probes."mypy/strict-override-global"]
+"pkg/__init__.py" = ""
+"pkg/core/__init__.py" = ""
+"pkg/core/m.py" = '''
+def f(x):
+    return x
+'''
+"pkg/legacy/__init__.py" = ""
+"pkg/legacy/m.py" = '''
+def f(x):
+    return x
+'''
+"pyproject.toml" = '''
+[tool.mypy]
+warn_unused_configs = true
+
+[[tool.mypy.overrides]]
+module = "pkg.core.*"
+strict = true
+'''
+
+[probes."mypy/inline-strict-rejected"]
+"m.py" = '''
+# mypy: strict
+
+def f(x):
+    return x
+'''
+
+[probes."mypy/global-only-in-override"]
+"pkg/__init__.py" = '''
+x = 1
+'''
+"pyproject.toml" = '''
+[tool.mypy]
+
+[[tool.mypy.overrides]]
+module = "pkg.*"
+warn_redundant_casts = true
+'''
+
+[probes."mypy/per-module-strict-recipe"]
+"pkg/__init__.py" = ""
+"pkg/core/__init__.py" = '''
+def g(x):
+    return x
+'''
+"pkg/core/m.py" = '''
+def f(x):
+    return x
+'''
+"pkg/legacy/__init__.py" = ""
+"pkg/legacy/m.py" = '''
+def f(x):
+    return x
+'''
+"pyproject.toml" = '''
+[tool.mypy]
+warn_unused_configs = true
+warn_redundant_casts = true
+
+[[tool.mypy.overrides]]
+module = "pkg.core.*"
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_calls = true
+disallow_untyped_decorators = true
+disallow_any_generics = true
+disallow_subclassing_any = true
+warn_return_any = true
+warn_unused_ignores = true
+no_implicit_reexport = true
+strict_equality = true
+extra_checks = true
+'''
+
+[probes."mypy/unused-config-section"]
+"m.py" = '''
+x = 1
+'''
+"pyproject.toml" = '''
+[tool.mypy]
+warn_unused_configs = true
+
+[[tool.mypy.overrides]]
+module = "nomatch.*"
+disallow_untyped_defs = true
+'''
+
+[probes."mypy/unannotated-return-any"]
+"m.py" = '''
+class X: ...
+
+def no_annotations():
+    return X()
+
+def params_only(n: int):
+    return X()
+
+reveal_type(no_annotations())
+reveal_type(params_only(1))
+'''
+
+[probes."mypy/unchecked-body"]
+"m.py" = '''
+from typing import assert_type
+
+def test_untyped():
+    assert_type(1, str)
+    x: int = "not checked"
+
+def test_typed() -> None:
+    assert_type(1, int)
+'''
+
+[probes."mypy/assert-type-exact"]
+"m.py" = '''
+from typing import assert_type
+
+
+def f(n: int) -> None:
+    assert_type(1, int)
+    assert_type(n, int)
+    assert_type(n, object)
+'''
+
+[probes."mypy/ignore-code-mismatch"]
+"m.py" = '''
+x: int = "a"  # type: ignore[attr-defined]
+'''
+
+[probes."mypy/unused-ignore"]
+"m.py" = '''
+x: int = 1  # type: ignore[assignment]
+y: int = "a"  # type: ignore
+'''
+"pyproject.toml" = '''
+[tool.mypy]
+warn_unused_ignores = true
+enable_error_code = ["ignore-without-code"]
+'''
+
+[probes."mypy/deprecated-opt-in"]
+"m.py" = '''
+from typing_extensions import deprecated
+
+@deprecated("use g")
+def f() -> None: ...
+
+f()
+'''
+
+[probes."mypy/explicit-override-opt-in"]
+"m.py" = '''
+class A:
+    def run(self) -> None: ...
+
+class B(A):
+    def run(self) -> None: ...
+'''
+
+[probes."mypy/exhaustive-match-opt-in"]
+"m.py" = '''
+from enum import Enum
+
+class Color(Enum):
+    RED = 1
+    BLUE = 2
+
+def name(c: Color) -> str:
+    match c:
+        case Color.RED:
+            return "red"
+    return "other"
+'''
+
+[probes."mypy/strict-no-unreachable"]
+"m.py" = '''
+def f(x: int) -> int:
+    if isinstance(x, int):
+        return x
+    return "never"
+'''
+
+[probes."mypy/output-json"]
+"m.py" = '''
+x: int = "a"
+'''
+
+[probes."mypy/strict-bytes"]
+"m.py" = '''
+def f(b: bytes) -> None: ...
+
+f(bytearray(b"x"))
+f(memoryview(b"x"))
+'''
+
+[probes."mypy/allow-redefinition"]
+"m.py" = '''
+def f() -> None:
+    x = 1
+    x = "a"
+    reveal_type(x)
+'''
+
+[probes."mypy/untyped-decorator"]
+"m.py" = '''
+def deco(fn):
+    return fn
+
+@deco
+def g(x: int) -> int:
+    return x
+'''
+
+[probes."mypy/possibly-undefined-opt-in"]
+"m.py" = '''
+def f(flag: bool) -> int:
+    if flag:
+        y = 1
+    return y
+'''

@@ -1,0 +1,614 @@
+# Claims backing references/peps-and-features.md, library-authoring.md and setup.md.
+
+[[claim]]
+id = "peps-import-floor-310"
+ref = "peps-and-features.md"
+statement = "For a 3.10 target, all three checkers reject importing Self, assert_type and reveal_type from typing"
+probe = "peps/import-floor"
+cmd = ["sh", "-c", "mypy --python-version 3.10 m.py; pyright --pythonversion 3.10 m.py; ty check --python-version 3.10 --output-format concise m.py"]
+expect_output = [
+  'm\.py:1: error: Module "typing" has no attribute "Self"',
+  '"assert_type" is unknown import symbol',
+  '"reveal_type" is unknown import symbol',
+  "m.py:1:\\d+: error\\[unresolved-import\\] Module `typing` has no member `assert_type`",
+]
+
+[[claim]]
+id = "peps-import-floor-312"
+ref = "peps-and-features.md"
+statement = "typing.override is 3.12+; typing.TypeIs, typing.ReadOnly and warnings.deprecated are 3.13+"
+probe = "peps/import-floor"
+cmd = ["sh", "-c", "pyright --pythonversion 3.12 m.py; ty check --python-version 3.12 --output-format concise m.py; echo ==313; ty check --python-version 3.13 --output-format concise m.py"]
+expect_output = [
+  '"TypeIs" is unknown import symbol',
+  '"ReadOnly" is unknown import symbol',
+  '"deprecated" is unknown import symbol',
+  "==313\\nAll checks passed!",
+]
+expect_no_output = ['"override" is unknown import symbol']
+
+[[claim]]
+id = "peps-forward-ref-mypy-silent"
+ref = "peps-and-features.md"
+statement = "Below 3.14, an unquoted reference to a class inside its own body is a NameError at runtime; pyright and ty report it, mypy does not"
+probe = "peps/forward-ref"
+cmd = ["sh", "-c", "mypy --python-version 3.13 m.py; pyright --pythonversion 3.13 m.py; ty check --python-version 3.13 --output-format concise m.py; echo ==314; pyright --pythonversion 3.14 m.py; ty check --python-version 3.14 m.py"]
+expect_output = [
+  "Success: no issues found",
+  '"Node" is not defined \(reportUndefinedVariable\)',
+  "error\\[unresolved-reference\\] Name `Node` used when not defined",
+  "==314\\n0 errors, 0 warnings, 0 informations\\nAll checks passed!",
+]
+
+[[claim]]
+id = "peps-696-defaults"
+ref = "peps-and-features.md"
+statement = "PEP 696 defaults (class Box[T = int]) make bare Box mean Box[int] in mypy, pyright and ty"
+probe = "peps/pep696"
+cmd = ["sh", "-c", "mypy m.py && pyright m.py && ty check m.py"]
+expect_exit = 0
+
+[[claim]]
+id = "peps-728-mypy-no-extra-items"
+ref = "peps-and-features.md"
+statement = "PEP 728: mypy supports closed=True but rejects extra_items=; pyright and ty support both"
+probe = "peps/pep728"
+cmd = ["sh", "-c", "mypy m.py; pyright m.py; ty check --output-format concise m.py"]
+expect_output = [
+  'Unexpected keyword argument "extra_items"',
+  'm\.py:12:\d+ - error: Type "dict\[str, int\]" is not assignable to declared type "Closed"',
+  'm\.py:14:\d+ - error: Type "dict\[str, int\]" is not assignable to declared type "Extra"',
+  "m.py:14:\\d+: error\\[invalid-argument-type\\]",
+]
+expect_no_output = ['m\.py:13:\d+ - error', "m.py:13:\\d+: error"]
+
+[[claim]]
+id = "peps-747-typeform"
+ref = "peps-and-features.md"
+statement = "PEP 747 TypeForm (typing 3.15, typing_extensions) is supported by mypy, pyright and ty"
+probe = "peps/pep747"
+cmd = ["sh", "-c", "mypy m.py && pyright m.py && ty check m.py"]
+expect_exit = 0
+
+[[claim]]
+id = "peps-800-disjoint-base"
+ref = "peps-and-features.md"
+statement = "PEP 800 @disjoint_base: all three checkers reject a class inheriting two disjoint bases"
+probe = "peps/pep800"
+cmd = ["sh", "-c", "mypy m.py; pyright m.py; ty check --output-format concise m.py"]
+expect_output = ["incompatible disjoint bases", "Base classes have incompatible disjoint bases", "error\\[instance-layout-conflict\\]"]
+
+[[claim]]
+id = "peps-661-sentinel"
+ref = "peps-and-features.md"
+statement = "PEP 661 sentinels narrow with `is` in all three checkers, as typing_extensions.Sentinel and as the 3.15 builtin sentinel"
+probe = "peps/pep661"
+cmd = ["sh", "-c", "mypy m.py && pyright m.py && ty check m.py && mypy --python-version 3.15 builtin.py && pyright --pythonversion 3.15 builtin.py && ty check --python-version 3.15 builtin.py"]
+expect_exit = 0
+
+[[claim]]
+id = "peps-702-deprecated-defaults"
+ref = "peps-and-features.md"
+statement = "Calling a @deprecated function: mypy and pyright (standard) are silent by default, ty warns; mypy needs --enable-error-code deprecated"
+probe = "peps/pep702"
+cmd = ["sh", "-c", "mypy m.py; pyright m.py; ty check --output-format concise m.py; echo ==enabled; mypy --enable-error-code deprecated m.py"]
+expect_output = [
+  "Success: no issues found",
+  "0 errors, 0 warnings, 0 informations",
+  "warning\\[deprecated\\] The function `old` is deprecated",
+  '==enabled\nm\.py:8: error: function m\.old is deprecated: use new\(\)  \[deprecated\]',
+]
+
+[[claim]]
+id = "peps-675-mypy-literalstring"
+ref = "peps-and-features.md"
+statement = "mypy treats LiteralString as str (accepts str arguments); pyright and ty enforce it"
+probe = "peps/pep675"
+cmd = ["sh", "-c", "mypy m.py; pyright m.py; ty check --output-format concise m.py"]
+expect_output = ["Success: no issues found", 'm\.py:9:\d+ - error: Argument of type "str"', "m.py:9:\\d+: error\\[invalid-argument-type\\]"]
+
+[[claim]]
+id = "peps-742-typeis-negative"
+ref = "peps-and-features.md"
+statement = "TypeIs narrows both branches; TypeGuard narrows only the positive branch (all three checkers)"
+probe = "peps/pep742"
+cmd = ["sh", "-c", "mypy m.py && pyright m.py && ty check m.py"]
+expect_exit = 0
+
+[[claim]]
+id = "peps-646-ty-literals"
+ref = "peps-and-features.md"
+statement = "Solving a TypeVarTuple, ty keeps literal types (tuple[Literal[1], Literal['a']]) where mypy and pyright widen to tuple[int, str]"
+probe = "peps/pep646"
+cmd = ["sh", "-c", "mypy m.py; pyright m.py; ty check --output-format concise m.py"]
+expect_output = ["Success: no issues found", "0 errors", "Type `tuple\\[Literal\\[1\\], Literal\\[\"a\"\\]\\]` does not match asserted type `tuple\\[int, str\\]`"]
+
+[[claim]]
+id = "peps-698-override"
+ref = "peps-and-features.md"
+statement = "@override on a method with no base method is an error in all three; a missing @override is not reported by default"
+probe = "peps/pep698"
+cmd = ["sh", "-c", "mypy m.py; pyright m.py; ty check --output-format concise m.py"]
+expect_output = ['Method "runn" is marked as an override', 'Method "runn" is marked as override', "error\\[invalid-explicit-override\\]"]
+expect_no_output = ['"run"', "`run`"]
+
+[[claim]]
+id = "peps-810-lazy-import"
+ref = "peps-and-features.md"
+statement = "PEP 810 `lazy import` syntax (3.15) parses in mypy, pyright and ty"
+probe = "peps/pep810"
+cmd = ["sh", "-c", "mypy --python-version 3.15 m.py && pyright --pythonversion 3.15 m.py && ty check --python-version 3.15 m.py"]
+expect_exit = 0
+
+[[claim]]
+id = "lib-verifytypes-resolution"
+ref = "library-authoring.md"
+statement = "pyright --verifytypes resolves the package through the interpreter's import path; unresolved, it prints 'No py.typed file found' and 0%"
+probe = "peps/verifytypes"
+cmd = ["sh", "-c", "pyright --verifytypes geo --ignoreexternal; echo ==pythonpath; PYTHONPATH=. pyright --verifytypes geo --ignoreexternal"]
+expect_output = ["error: No py.typed file found", "Type completeness score: 0%", "==pythonpath[\\s\\S]*Path of py.typed file"]
+
+[[claim]]
+id = "lib-verifytypes-rules"
+ref = "library-authoring.md"
+statement = "verifytypes counts inferred return types as unknown and unannotated self.x = <call> as ambiguous; literal and list-literal assignments are fine"
+probe = "peps/verifytypes"
+cmd = ["sh", "-c", "PYTHONPATH=. pyright --verifytypes geo --ignoreexternal"]
+expect_exit = 1
+expect_output = [
+  "geo.inferred\\n.*Return type annotation is missing",
+  "geo.Shape.n\\n.*could be inferred differently",
+  "geo.Shape.pts\\n.*could be inferred differently",
+  "Type completeness score: 60%",
+]
+expect_no_output = ["geo.DEFAULT", "geo.NAMES", "geo.Shape.kind", "geo.Shape._cache"]
+
+[[claim]]
+id = "lib-verifytypes-exports"
+ref = "library-authoring.md"
+statement = "A py.typed package exports `from m import x as x` and names in __all__; a plain `from m import x` not in __all__ is private"
+probe = "peps/verifytypes"
+cmd = ["sh", "-c", "PYTHONPATH=. pyright --verifytypes geo --ignoreexternal --outputjson"]
+expect_output = ['"name": "geo.perimeter"', '"name": "geo.volume"']
+expect_no_output = ['"name": "geo.area"']
+
+[[claim]]
+id = "lib-type-tests-unused-ignore"
+ref = "library-authoring.md"
+statement = "With warn_unused_ignores, an expected-error line marked type: ignore[code] fails the type test when the error disappears"
+probe = "peps/type-tests"
+cmd = ["mypy", "typing_tests.py"]
+expect_exit = 1
+expect_output = ['typing_tests\.py:5: error: Unused "type: ignore" comment  \[unused-ignore\]']
+expect_no_output = ["typing_tests\\.py:4"]
+
+[[claim]]
+id = "setup-ty-requires-python"
+ref = "setup.md"
+statement = "Without python-version, ty checks against the lower bound of requires-python; mypy and pyright use the interpreter's version"
+probe = "peps/ty-requires-python"
+cmd = ["sh", "-c", "mypy m.py; pyright m.py; ty check --output-format concise m.py"]
+expect_output = ["Success: no issues found", "0 errors", "error\\[unresolved-import\\] Module `typing` has no member `Self`"]
+
+[[claim]]
+id = "setup-pyrightconfig-wins"
+ref = "setup.md"
+statement = "pyrightconfig.json takes precedence over [tool.pyright] in pyproject.toml"
+probe = "peps/pyrightconfig-wins"
+cmd = ["sh", "-c", "pyright m.py; echo ==without; rm pyrightconfig.json; pyright m.py"]
+expect_output = ["0 errors, 0 warnings, 0 informations\\n==without", "==without[\\s\\S]*[1-9] errors"]
+
+[[claim]]
+id = "setup-ty-no-annotation-rules"
+ref = "setup.md"
+statement = "ty has no missing-annotation rules: an unannotated def passes; pyright strict flags it"
+probe = "peps/no-annotation-rules"
+cmd = ["sh", "-c", "ty check m.py; echo ==strict; echo '{\"typeCheckingMode\": \"strict\"}' > pyrightconfig.json; pyright m.py"]
+expect_output = ["All checks passed!\\n==strict", "reportMissingParameterType"]
+
+[[claim]]
+id = "lib-inferred-return"
+ref = "library-authoring.md"
+statement = "An unannotated return is Any in mypy and Unknown in ty, even with annotated parameters; pyright infers it"
+probe = "peps/inferred-return"
+cmd = ["sh", "-c", "mypy m.py; pyright m.py; ty check --output-format concise m.py"]
+expect_output = ['Expression is of type "Any", not "X"', "0 errors", "Type `Unknown` does not match asserted type `X`"]
+
+[[claim]]
+id = "setup-sample-config"
+ref = "setup.md"
+statement = "The side-by-side sample config is valid for all three checkers and applies strictness only to the core package"
+probe = "peps/configs"
+cmd = ["sh", "-c", "mypy; pyright; ty check --output-format concise"]
+expect_output = [
+  'src/app/core/m\.py:1: error: Function is missing a type annotation  \[no-untyped-def\]',
+  'core/m\.py:1:7 - error: Type annotation is missing for parameter "x" \(reportMissingParameterType\)',
+  "All checks passed!",
+]
+expect_no_output = ["lax\\.py", "Unrecognized", "unrecognized"]
+
+[[claim]]
+id = "setup-unknown-keys"
+ref = "setup.md"
+statement = "An unknown key makes ty fail to start; mypy and pyright only warn and keep checking"
+probe = "peps/configs"
+cmd = ["sh", "-c", "printf '\\n[tool.ty.terminal]\\nbogus = 1\\n' >> pyproject.toml; ty check; echo \"ty-exit=$?\"; sed -i.bak 's/^warn_unused_configs = true/&\\nbogus_flag = true/; s/^typeCheckingMode = \"standard\"/&\\nbogusOption = true/' pyproject.toml; mypy; pyright"]
+expect_output = ["ty failed", "ty-exit=2", "Unrecognized option: bogus_flag", 'unrecognized setting "bogusOption"', "Function is missing a type annotation"]
+
+[[claim]]
+id = "setup-ty-toml-wins"
+ref = "setup.md"
+statement = "ty.toml takes precedence over [tool.ty] in pyproject.toml"
+probe = "peps/ty-toml-wins"
+cmd = ["ty", "check", "--output-format", "concise"]
+expect_exit = 1
+expect_output = ["Module `typing` has no member `Self`"]
+
+
+[probes."peps/import-floor"]
+"m.py" = '''
+from typing import Self, assert_type, reveal_type
+from typing import override
+from typing import ReadOnly, TypeIs
+from warnings import deprecated
+'''
+
+[probes."peps/forward-ref"]
+"m.py" = '''
+from typing import ClassVar
+
+
+class Node:
+    registry: ClassVar[dict[str, Node]] = {}
+
+    def clone(self) -> Node:
+        return self
+'''
+
+[probes."peps/pep696"]
+"m.py" = '''
+from typing import assert_type
+
+
+class Box[T = int]:
+    def get(self) -> T:
+        raise NotImplementedError
+
+
+def use(plain: Box, explicit: Box[str]) -> None:
+    assert_type(plain.get(), int)
+    assert_type(explicit.get(), str)
+'''
+
+[probes."peps/pep728"]
+"m.py" = '''
+from typing_extensions import TypedDict
+
+
+class Closed(TypedDict, closed=True):
+    x: int
+
+
+class Extra(TypedDict, extra_items=str):
+    x: int
+
+
+a: Closed = {"x": 1, "y": 2}  # error in every checker
+b: Extra = {"x": 1, "y": "s"}  # valid
+c: Extra = {"x": 1, "y": 3}  # error: extra item must be str
+'''
+
+[probes."peps/pep747"]
+"m.py" = '''
+from typing_extensions import TypeForm, assert_type
+
+
+def trycast[T](form: TypeForm[T], value: object) -> T | None:
+    raise NotImplementedError
+
+
+assert_type(trycast(int | str, 1), int | str | None)
+'''
+
+[probes."peps/pep800"]
+"m.py" = '''
+from typing_extensions import disjoint_base
+
+
+@disjoint_base
+class A: ...
+
+
+@disjoint_base
+class B: ...
+
+
+class C(A, B): ...
+'''
+
+[probes."peps/pep661"]
+"builtin.py" = '''
+from typing import assert_type
+
+MISSING = sentinel("MISSING")
+
+
+def f(x: int | MISSING = MISSING) -> int:
+    if x is MISSING:
+        return 0
+    assert_type(x, int)
+    return x
+'''
+"m.py" = '''
+from typing_extensions import Sentinel, assert_type
+
+MISSING = Sentinel("MISSING")
+
+
+def f(x: int | MISSING = MISSING) -> int:
+    if x is MISSING:
+        return 0
+    assert_type(x, int)
+    return x
+'''
+
+[probes."peps/pep702"]
+"m.py" = '''
+from warnings import deprecated
+
+
+@deprecated("use new()")
+def old() -> None: ...
+
+
+old()
+'''
+
+[probes."peps/pep675"]
+"m.py" = '''
+from typing import LiteralString
+
+
+def query(sql: LiteralString) -> None: ...
+
+
+def handler(user: str) -> None:
+    query("select 1")
+    query("select " + user)
+'''
+
+[probes."peps/pep742"]
+"m.py" = '''
+from typing import TypeGuard, TypeIs, assert_type
+
+
+def guard(x: object) -> TypeGuard[str]:
+    return isinstance(x, str)
+
+
+def is_str(x: object) -> TypeIs[str]:
+    return isinstance(x, str)
+
+
+def f(x: int | str) -> None:
+    if guard(x):
+        assert_type(x, str)
+    else:
+        assert_type(x, int | str)
+    if is_str(x):
+        assert_type(x, str)
+    else:
+        assert_type(x, int)
+'''
+
+[probes."peps/pep646"]
+"m.py" = '''
+from typing import assert_type
+
+
+def pack[*Ts](*args: *Ts) -> tuple[*Ts]:
+    return args
+
+
+assert_type(pack(1, "a"), tuple[int, str])
+'''
+
+[probes."peps/pep698"]
+"m.py" = '''
+from typing import override
+
+
+class Base:
+    def run(self) -> None: ...
+
+
+class Child(Base):
+    @override
+    def runn(self) -> None: ...
+
+    def run(self) -> None: ...
+'''
+
+[probes."peps/pep810"]
+"m.py" = '''
+lazy import json
+lazy from os import path
+
+print(json.dumps(1), path.sep)
+'''
+
+[probes."peps/verifytypes"]
+"geo/__init__.py" = '''
+from geo._impl import area
+from geo._impl import perimeter as perimeter
+from geo._impl import volume
+
+__all__ = ["volume", "Shape", "inferred", "DEFAULT", "NAMES", "perimeter"]
+
+DEFAULT = 3.0
+NAMES = ["a"]
+
+
+def inferred(x: int):
+    return x
+
+
+class Shape:
+    kind = "shape"
+
+    def __init__(self, pts: list[float]) -> None:
+        self.pts = list(pts)
+        self.n = len(pts)
+        self._cache = 0
+'''
+"geo/_impl.py" = '''
+def area(w: float, h: float) -> float:
+    return w * h
+
+
+def perimeter(w: float, h: float) -> float:
+    return 2 * (w + h)
+
+
+def volume(w: float, h: float, d: float) -> float:
+    return w * h * d
+'''
+"geo/py.typed" = ""
+
+[probes."peps/type-tests"]
+"pyproject.toml" = '''
+[tool.mypy]
+warn_unused_ignores = true
+'''
+"typing_tests.py" = '''
+def takes_int(x: int) -> None: ...
+
+
+takes_int("no")  # type: ignore[arg-type]
+takes_int(1)  # type: ignore[arg-type]
+'''
+
+[probes."peps/ty-requires-python"]
+"m.py" = '''
+from typing import Self
+'''
+"pyproject.toml" = '''
+[project]
+name = "demo"
+version = "0"
+requires-python = ">=3.10"
+'''
+
+[probes."peps/pyrightconfig-wins"]
+"m.py" = '''
+def f(x):
+    return x
+'''
+"pyproject.toml" = '''
+[tool.pyright]
+typeCheckingMode = "strict"
+'''
+"pyrightconfig.json" = '''
+{"typeCheckingMode": "basic"}
+'''
+
+[probes."peps/no-annotation-rules"]
+"m.py" = '''
+def f(x):
+    return x
+'''
+
+[probes."peps/inferred-return"]
+"m.py" = '''
+from typing import assert_type
+
+
+class X: ...
+
+
+def make(a: int):
+    return X()
+
+
+assert_type(make(1), X)
+'''
+
+[probes."peps/configs"]
+"pyproject.toml" = '''
+[project]
+name = "app"
+version = "0"
+requires-python = ">=3.12"
+
+[tool.mypy]
+python_version = "3.12"
+files = ["src", "tests"]
+mypy_path = "src"
+warn_unused_configs = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+enable_error_code = ["ignore-without-code", "redundant-expr", "truthy-bool", "possibly-undefined"]
+
+[[tool.mypy.overrides]]
+module = "app.core.*"
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+disallow_any_generics = true
+warn_return_any = true
+
+[tool.pyright]
+include = ["src", "tests"]
+pythonVersion = "3.12"
+typeCheckingMode = "standard"
+strict = ["src/app/core"]
+reportUnnecessaryTypeIgnoreComment = "error"
+venvPath = "."
+venv = ".venv"
+
+[tool.ty.environment]
+python-version = "3.12"
+root = ["src"]
+
+[tool.ty.src]
+include = ["src", "tests"]
+
+[tool.ty.rules]
+possibly-unresolved-reference = "error"
+unused-ignore-comment = "error"
+unused-type-ignore-comment = "error"
+
+[[tool.ty.overrides]]
+include = ["tests/**"]
+[tool.ty.overrides.rules]
+unresolved-attribute = "ignore"
+'''
+"src/app/__init__.py" = ""
+"src/app/core/__init__.py" = ""
+"src/app/core/m.py" = '''
+def f(x):
+    return x
+'''
+"src/app/lax.py" = '''
+def g(x):
+    return x
+'''
+"tests/test_g.py" = '''
+from app.lax import g
+
+
+def test_g() -> None:
+    assert g(1) == 1
+'''
+
+[probes."peps/ty-toml-wins"]
+"m.py" = '''
+from typing import Self
+'''
+"pyproject.toml" = '''
+[tool.ty.environment]
+python-version = "3.14"
+'''
+"ty.toml" = '''
+[environment]
+python-version = "3.10"
+'''
