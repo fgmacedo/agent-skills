@@ -56,6 +56,14 @@ Ruling: <what was decided> - <why, citing the criterion or decision> - cost if w
 
 The report copies every ruling and gap, numbered, so the user can review them in one place.
 
+## The ledger feeds the progress section
+
+The ledger is the orchestrator's record; the progress state file (`progress.md`) is the
+user's view of it. After each ledger entry that changes a task's or gate's state, set the
+status with `progress.py set`, regenerate the report's sections and commit them. A resumed
+session checks the state file against the ledger and `git log` before continuing, and
+corrects the state file where they disagree.
+
 ## Resume protocol
 
 On start, and after any compaction:

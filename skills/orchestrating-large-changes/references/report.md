@@ -3,11 +3,23 @@
 Written for a person who was away and will spend minutes, not hours. Facts with evidence; the
 ledger holds the full outputs. Commit it next to the plan.
 
+The file starts at the first merge as a live report holding only the Progress section
+(`progress.md`), kept current during the run. At the end, add the sections below after it,
+and the progress shows the final state.
+
 ~~~markdown
 # <change> report
 
 Integration branch `<branch>`, head `<sha>` (installed as `<version>`), <n> commits on top of
 `<plan-commit>`. Run window: <start> to <end> (<timezone>). Ledger: `<path>`.
+
+## Progress
+
+<progress-py-show-ascii-and-progress-py-mermaid>
+
+## Tasks
+
+<progress-py-table>
 
 ## What shipped
 

@@ -122,7 +122,8 @@ A method for delivering a change too large for one context, with one agent as or
 4. **Run the waves**: an implementer per task in its own worktree, review and fix rounds, merges in task order, the gate after every wave, worktrees removed as soon as they merge
 5. **Rule, do not ask**: `Ruling: what - why - cost if wrong` in a ledger that survives context compaction; reserved items are skipped and reported, never bypassed
 6. **Rehearse and accept live**: a sandbox with scripted actors, run-prefixed resources, one variable per diagnosis, evidence per item
-7. **Final review, cleanup and report**: what shipped, evidence, every ruling, gaps, the user's validation and rollback steps
+7. **Progress at a glance**: `scripts/progress.py` keeps one state file synced from the plan's dependency graph, prints a terminal board (bars per release, tasks by dependency level, what is held and next) at the end of every loop turn, and generates the report's Mermaid graph and task table linked to the plan
+8. **Final review, cleanup and report**: what shipped, evidence, every ruling, gaps, the user's validation and rollback steps
 
 When the result is pull requests in several repositories and Orca is present, the orchestrator delegates one sub-orchestrator per repository as an Orca supervised worker; each runs the same method on its slice and negotiates contract changes with the parent through Orca messages. In one repository, plain subagents and agent teams are enough.
 

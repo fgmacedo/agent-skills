@@ -102,6 +102,10 @@ code (prompt in `references/plan-lanes.md`). Apply what holds up, commit, then d
   (or `references/delegation.md`) says.
 - Merge in task order with `--no-ff`, run the wave's integration check, remove the wave's
   worktrees and branches, log it. Release the next wave only on green.
+- Track progress in one state file through `python3 scripts/progress.py` (sync from the
+  plan, set a status after each ledger entry), **end every loop turn with its `show` board**
+  so the terminal always shows how much is done, and regenerate the report's graph and task
+  table from it (`references/progress.md`).
 - Keep your context small: delegates reply with a short status; reports, diffs and findings
   live in files you read only when a verdict is not clean.
 
