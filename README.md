@@ -13,6 +13,7 @@ These skills work with [Claude Code](https://docs.anthropic.com/en/docs/claude-c
 | [removing-dead-code](skills/removing-dead-code/) | Language-neutral removal of dead code and unused dependencies, ordered by the proof each deletion needs, with production coverage across many services. Python reference included. |
 | [python-typing](skills/python-typing/) | Static typing with mypy, pyright, basedpyright and ty: fixing checker errors, making checkers agree, typing dynamic code, suppressions, configuration and typed libraries. |
 | [refactoring-python](skills/refactoring-python/) | Safe, incremental refactoring and modernization of Python code: characterization tests first, one named transformation per commit, ports only where a dependency is external, idiomatic Python as the definition of done. |
+| [orchestrating-large-changes](skills/orchestrating-large-changes/) | One orchestrating agent delivers a large plan through parallel subagents: risk settled with the user once, after the plan, then an unattended run with rulings, integration, live acceptance in a sandbox and a report. |
 
 ## Installation
 
@@ -29,6 +30,7 @@ npx skills add fgmacedo/agent-skills --skill python-profiling
 npx skills add fgmacedo/agent-skills --skill porting-py2-to-py3
 npx skills add fgmacedo/agent-skills --skill removing-dead-code
 npx skills add fgmacedo/agent-skills --skill refactoring-python
+npx skills add fgmacedo/agent-skills --skill orchestrating-large-changes
 ```
 
 ### List available skills
@@ -109,6 +111,24 @@ Refactoring as a sequence of reviewable commits. Guides the agent through:
 **Trigger phrases:** "refactor this", "modernize", "make it testable", "make it pythonic", "split this module", "this is a god class", "copy-pasted logic", "extract into a service", "hexagonal", "ports and adapters", "characterization test", "tidy first"
 
 **Claims:** the Python facts the skill states (patch targets after a move, dataclass hashability, enum string values, import cycles, set ordering) run as executable probes in [`claims/refactoring-python/`](claims/refactoring-python/).
+
+### orchestrating-large-changes
+
+A method for delivering a change too large for one context, with one agent as orchestrator and integrator. Guides the agent through:
+
+1. **Plan for lanes**: success criteria an agent can check, a dependency graph, waves, a lane table where each task owns its files, contracts written in full, an integration check per wave
+2. **Settle risk once, after the plan**: a checklist of the questions only the user can answer (blast radius, live tests, data, the user's own resources, safety mechanisms, reserved decisions), asked in one message with defaults, written into a handoff with binding rules and a definition of done
+3. **Harden the plan**: an adversarial review against the code before the first delegation
+4. **Run the waves**: an implementer per task in its own worktree, review and fix rounds, merges in task order, the gate after every wave, worktrees removed as soon as they merge
+5. **Rule, do not ask**: `Ruling: what - why - cost if wrong` in a ledger that survives context compaction; reserved items are skipped and reported, never bypassed
+6. **Rehearse and accept live**: a sandbox with scripted actors, run-prefixed resources, one variable per diagnosis, evidence per item
+7. **Final review, cleanup and report**: what shipped, evidence, every ruling, gaps, the user's validation and rollback steps
+
+When the result is pull requests in several repositories and Orca is present, the orchestrator delegates one sub-orchestrator per repository as an Orca supervised worker; each runs the same method on its slice and negotiates contract changes with the parent through Orca messages. In one repository, plain subagents and agent teams are enough.
+
+Composes with the `superpowers` skills (writing-plans, subagent-driven-development, requesting-code-review, using-git-worktrees, finishing-a-development-branch) and works in a reduced form without them.
+
+**Trigger phrases:** "run this while I'm away", "until Monday", "orchestrate", "delegate to subagents", "agent teams", "parallel lanes", "handoff", "integration branch", "live acceptance"
 
 ## Who This Is For
 
