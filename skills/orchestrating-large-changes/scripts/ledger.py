@@ -1,21 +1,20 @@
-"""Track a plan's progress in one state file and render it.
+"""Render a run's progress from its plan graph and its ledger.
 
-  python3 progress.py sync STATE --plan PLAN [--prefix "Task "] [--title TEXT]
-  python3 progress.py set STATE ID... --status STATUS [--release NAME] [--note TEXT]
-  python3 progress.py add STATE ID --title TEXT [--gate] [--after IDS] [--before IDS] [--release NAME]
-  python3 progress.py show STATE [--ascii] [--color auto|always|never] [--repo DIR]
-  python3 progress.py mermaid STATE
-  python3 progress.py table STATE --link PATH
+  python3 ledger.py show CORE LEDGER [--ascii] [--color auto|always|never] [--repo DIR]
+  python3 ledger.py times CORE LEDGER
+  python3 ledger.py mermaid CORE LEDGER
+  python3 ledger.py table CORE LEDGER --link DIR
+  python3 ledger.py section FILE NAME...
 
-sync reads the plan's task headings and the first Mermaid flowchart in it (edges, and
-subgraphs as releases), keeps every known status, adds new nodes and marks nodes gone from
-the plan as dropped. Graph nodes without a task heading are gates (reviews, live steps,
-external milestones). STATUS is one of: todo, wip, review, done, held, dropped.
+CORE is the plan's core.md: its first Mermaid flowchart gives the nodes, the edges and the
+releases (subgraphs). A node with a file in tasks/ next to CORE (tasks/T7-slug.md or
+tasks/T7.md), or with an id like T7, is a task; any other node is a gate. LEDGER lines of the form
+"- HH:MM ID[,ID...] EVENT details" set the status; "## YYYY-MM-DD" headings set the day.
+EVENT is one of: dispatched, started, reported, clean, fix, merged, passed, held, dropped.
 """
 
 import argparse
 import datetime
-import json
 import os
 import re
 import shutil
@@ -23,6 +22,17 @@ import subprocess
 import sys
 
 STATUSES = ("todo", "wip", "review", "done", "held", "dropped")
+EVENTS = {
+    "dispatched": "wip",
+    "started": "wip",
+    "reported": "review",
+    "clean": "review",
+    "fix": "wip",
+    "merged": "done",
+    "passed": "done",
+    "held": "held",
+    "dropped": "dropped",
+}
 GLYPH = {"done": "✔", "wip": "◐", "review": "◎", "todo": "·", "held": "⏸", "dropped": "✗"}
 ASCII_GLYPH = {"done": "x", "wip": "~", "review": "r", "todo": ".", "held": "h", "dropped": "-"}
 WORDS = {
@@ -44,43 +54,14 @@ MERMAID_CLASS = {
     "gate": "fill:#1565c0,color:#fff,stroke:#0d47a1",
 }
 
-HEADING = re.compile(r"(#{1,6})\s+(.+?)\s*#*\s*$")
-CODE = re.compile(r"(?:Task\s+)?([A-Za-z]*\d+[A-Za-z]?)\s*[:.]\s*(.+)")
 NODE = re.compile(r"^([A-Za-z_][\w-]*)\s*(?:\[\"?(.*?)\"?\]|\(\"?(.*?)\"?\)|\{\"?(.*?)\"?\})?$")
 ARROW = re.compile(r"\s*(?:<?-->|<?==>|-\.->|---|--[^-<>|]+-->)\s*")
+DAY = re.compile(r"^#+\s+(\d{4}-\d{2}-\d{2})\b")
+LINE = re.compile(r"^-\s+(\d{1,2}:\d{2})\s+([A-Za-z_][\w-]*(?:,[A-Za-z_][\w-]*)*)\s+(%s)\b\s*(.*)$" % "|".join(EVENTS))
 
 
 def slug(text):
     return re.sub(r"[^\w\- ]", "", text.strip().lower()).replace(" ", "-")
-
-
-def unfenced(lines):
-    fence = None
-    for line in lines:
-        marker = line.lstrip()[:3]
-        if marker in ("```", "~~~"):
-            fence = marker if fence is None else (None if marker == fence else fence)
-            yield line, True
-            continue
-        yield line, fence is not None
-
-
-def plan_tasks(text, prefix):
-    seen, tasks = {}, []
-    for line, fenced in unfenced(text.splitlines()):
-        m = None if fenced else HEADING.match(line)
-        if not m:
-            continue
-        heading = m.group(2)
-        base = slug(heading)
-        count = seen.get(base, 0)
-        seen[base] = count + 1
-        if not heading.startswith(prefix):
-            continue
-        cm = CODE.match(heading)
-        code, title = (cm.group(1), cm.group(2)) if cm else (heading, heading)
-        tasks.append({"code": code, "title": title, "anchor": base if count == 0 else f"{base}-{count}"})
-    return tasks
 
 
 def plan_graph(text):
@@ -119,6 +100,8 @@ def plan_graph(text):
                 node = nodes.setdefault(node_id, {"label": node_id, "release": release})
                 if label:
                     node["label"] = label
+                if release and not node["release"]:
+                    node["release"] = release
                 ids.append(node_id)
             groups.append(ids)
         for left, right in zip(groups, groups[1:]):
@@ -126,112 +109,90 @@ def plan_graph(text):
     return nodes, edges
 
 
-def match_heading(node_id, label, by_code):
-    for key in (node_id, label, label.split()[0] if label else ""):
-        if key in by_code:
-            return by_code[key]
-    m = re.fullmatch(r"[Tt](\d+)", node_id)
-    return by_code.get(m.group(1)) if m else None
+def task_files(core):
+    folder = os.path.join(os.path.dirname(os.path.abspath(core)), "tasks")
+    found = {}
+    if os.path.isdir(folder):
+        for name in sorted(os.listdir(folder)):
+            if name.endswith(".md"):
+                found[re.split(r"[-.]", name, maxsplit=1)[0]] = os.path.join(folder, name)
+    return found
 
 
-def load(path):
+def core_title(core):
+    with open(core, encoding="utf-8") as f:
+        for line in f:
+            if line.startswith("# "):
+                return line[2:].strip()
+    return os.path.basename(os.path.dirname(os.path.abspath(core)))
+
+
+def task_title(path, task_id):
     with open(path, encoding="utf-8") as f:
-        return json.load(f)
+        for line in f:
+            m = re.match(r"#\s+(.+)", line)
+            if m:
+                return re.sub(rf"^{re.escape(task_id)}\b[\s:.-]*", "", m.group(1).strip())
+    return task_id
 
 
-def save(path, state):
-    state["updated"] = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
-    tmp = f"{path}.tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(state, f, indent=1, ensure_ascii=False)
-    os.replace(tmp, path)
-
-
-def cmd_sync(args):
-    with open(args.plan, encoding="utf-8") as f:
-        text = f.read()
-    tasks = plan_tasks(text, args.prefix)
-    nodes, edges = plan_graph(text)
-    by_code = {t["code"]: t for t in tasks}
-    order = {t["code"]: n for n, t in enumerate(tasks)}
-    old = load(args.state) if os.path.exists(args.state) else {"items": []}
-    known = {i["id"]: i for i in old["items"]}
-    items, used = [], set()
-    for node_id, node in nodes.items():
-        task = match_heading(node_id, node["label"], by_code)
-        if task:
-            used.add(task["code"])
-        items.append({
+def load(core, ledger):
+    with open(core, encoding="utf-8") as f:
+        nodes, edges = plan_graph(f.read())
+    files = task_files(core)
+    for task_id in files:
+        nodes.setdefault(task_id, {"label": task_id, "release": None})
+    items = {}
+    for order, (node_id, node) in enumerate(nodes.items()):
+        path = files.get(node_id)
+        items[node_id] = {
             "id": node_id,
-            "code": task["code"] if task else node_id,
-            "title": task["title"] if task else node["label"],
-            "anchor": task["anchor"] if task else None,
-            "kind": "task" if task else "gate",
+            "title": task_title(path, node_id) if path else node["label"],
+            "file": os.path.basename(path) if path else None,
+            "kind": "task" if path or re.fullmatch(r"T\d+", node_id) else "gate",
             "release": node["release"],
             "deps": sorted({a for a, b in edges if b == node_id}),
-        })
-    t_style = any(re.fullmatch(r"T\d+", n) for n in nodes)
-    for task in tasks:
-        if task["code"] in used:
-            continue
-        task_id = f"T{task['code']}" if t_style and task["code"].isdigit() else task["code"]
-        host = next((n for n, node in nodes.items()
-                     if re.search(rf"\b({re.escape(task_id)}|{re.escape(task['code'])})\b", node["label"])), None)
-        items.append({"id": task_id, "code": task["code"], "title": task["title"], "anchor": task["anchor"],
-                      "kind": "task", "release": nodes[host]["release"] if host else None,
-                      "deps": sorted({a for a, b in edges if b == host}) if host else []})
-    for item in items:
-        item["order"] = order.get(item["code"], len(order))
-        prev = known.pop(item["id"], {})
-        item["status"] = prev.get("status", "todo")
-        item["note"] = prev.get("note", "")
-        if prev.get("moved"):
-            item["release"], item["moved"] = prev["release"], True
-        if prev.get("added"):
-            item.update(added=True, deps=prev["deps"])
-    for gone in known.values():
-        if gone.get("added"):
-            items.append(gone)
-        elif gone["status"] != "dropped":
-            items.append({**gone, "status": "dropped", "note": gone.get("note") or "gone from the plan"})
-    state = {"title": args.title or old.get("title") or os.path.basename(args.plan), "plan": args.plan, "items": items}
-    save(args.state, state)
-    print(f"{len(items)} items, {sum(i['kind'] == 'task' for i in items)} tasks, {len(edges)} edges")
-
-
-def find(state, ids):
-    index = {i["id"]: i for i in state["items"]}
-    missing = [i for i in ids if i not in index]
-    if missing:
-        sys.exit(f"unknown id: {', '.join(missing)}")
-    return [index[i] for i in ids]
-
-
-def cmd_set(args):
-    state = load(args.state)
-    for item in find(state, args.ids):
-        if args.status:
-            item["status"] = args.status
-        if args.release is not None:
-            item["release"], item["moved"] = args.release, True
-        if args.note is not None:
-            item["note"] = args.note
-    save(args.state, state)
-
-
-def cmd_add(args):
-    state = load(args.state)
-    if any(i["id"] == args.id for i in state["items"]):
-        sys.exit(f"{args.id} exists; use set")
-    after = args.after.split(",") if args.after else []
-    find(state, after)
-    state["items"].append({"id": args.id, "code": args.id, "title": args.title, "anchor": None,
-                           "kind": "gate" if args.gate else "task", "release": args.release,
-                           "deps": after, "status": "todo", "note": "", "added": True})
-    for item in find(state, args.before.split(",") if args.before else []):
-        item["deps"] = sorted(set(item["deps"]) | {args.id})
-        item["added"] = True
-    save(args.state, state)
+            "order": order,
+            "status": "todo",
+            "note": "",
+            "start": None,
+            "end": None,
+            "fixes": 0,
+        }
+    day, last, updated = None, None, None
+    with open(ledger, encoding="utf-8") as f:
+        for line in f:
+            dm = DAY.match(line)
+            if dm:
+                day = datetime.date.fromisoformat(dm.group(1))
+                last = None
+                continue
+            m = LINE.match(line.strip())
+            if not m:
+                continue
+            clock, ids, event, details = m.groups()
+            hour, minute = map(int, clock.split(":"))
+            base = day or datetime.date(2000, 1, 1)
+            when = datetime.datetime.combine(base, datetime.time(hour, minute))
+            while last and when < last:
+                when += datetime.timedelta(days=1)
+            last = updated = when
+            for item_id in ids.split(","):
+                item = items.get(item_id)
+                if not item:
+                    continue
+                item["status"] = EVENTS[event]
+                if event in ("dispatched", "started") and not item["start"]:
+                    item["start"] = when
+                if event in ("merged", "passed"):
+                    item["end"] = when
+                if event == "fix":
+                    item["fixes"] += 1
+                if event in ("held", "dropped"):
+                    item["note"] = details.lstrip("-: ").strip()
+                else:
+                    item["note"] = ""
+    return list(items.values()), updated, day is not None
 
 
 def levels(items):
@@ -265,7 +226,7 @@ def head(repo):
 
 
 def cmd_show(args):
-    state = load(args.state)
+    all_items, updated, dated = load(args.core, args.ledger)
     color = args.color == "always" or (args.color == "auto" and sys.stdout.isatty() and not os.environ.get("NO_COLOR"))
     glyphs = ASCII_GLYPH if args.ascii else GLYPH
 
@@ -274,12 +235,13 @@ def cmd_show(args):
             return text
         return f"\033[{'34' if gate and status != 'done' else ANSI[status]}m{text}\033[0m"
 
-    items = [i for i in state["items"] if i["status"] != "dropped"]
+    items = [i for i in all_items if i["status"] != "dropped"]
     tasks = [i for i in items if i["kind"] == "task"]
     gates = [i for i in items if i["kind"] == "gate"]
-    updated = datetime.datetime.fromisoformat(state["updated"]).astimezone().strftime("%Y-%m-%d %H:%M %Z")
+    title = args.title or core_title(args.core)
+    stamp = updated.strftime("%Y-%m-%d %H:%M" if dated else "%H:%M") if updated else "no entries"
     sha = head(args.repo)
-    out = [f"{state['title']}  ·  updated {updated}" + (f"  ·  head {sha}" if sha else ""), ""]
+    out = [f"{title}  ·  ledger {stamp}" + (f"  ·  head {sha}" if sha else ""), ""]
 
     def counts(group):
         n = {s: sum(i["status"] == s for i in group) for s in STATUSES}
@@ -333,7 +295,7 @@ def cmd_show(args):
             line += cell + "  "
         out.append(prefix + line.rstrip())
 
-    status = {i["id"]: i["status"] for i in state["items"]}
+    status = {i["id"]: i["status"] for i in all_items}
     ready = [i["id"] for i in items if i["status"] == "todo"
              and all(status.get(d) in ("done", "dropped", None) for d in i["deps"])]
     held = [f"{i['id']} ({i['note']})" if i["note"] else i["id"] for i in items if i["status"] == "held"]
@@ -346,26 +308,47 @@ def cmd_show(args):
     print("\n".join(out))
 
 
+def minutes(delta):
+    total = int(delta.total_seconds() // 60)
+    return f"{total // 60}h{total % 60:02d}" if total >= 60 else f"{total}m"
+
+
+def cmd_times(args):
+    items, _, _ = load(args.core, args.ledger)
+    started = sorted((i for i in items if i["start"]), key=lambda i: (i["start"], i["order"]))
+    print("| Item | Dispatch | Merge | Wall | Fix rounds |")
+    print("|---|---|---|---|---|")
+    for item in started:
+        end = item["end"]
+        wall = minutes(end - item["start"]) if end else ""
+        print(f"| {item['id']} | {item['start']:%H:%M} | {f'{end:%H:%M}' if end else ''} | {wall} "
+              f"| {item['fixes']} |")
+    ends = [i["end"] for i in items if i["end"]]
+    if started and ends:
+        tasks = [i for i in items if i["kind"] == "task" and i["status"] != "dropped"]
+        merged = sum(1 for i in tasks if i["status"] == "done")
+        print(f"\n{merged}/{len(tasks)} tasks merged in {minutes(max(ends) - started[0]['start'])} "
+              f"from the first dispatch; {sum(i['fixes'] for i in items)} fix rounds; "
+              f"{sum(1 for i in started if i['fixes'] == 0 and i['end'])} passed without a fix.")
+
+
 def cmd_mermaid(args):
-    state = load(args.state)
-    items = state["items"]
+    items, _, _ = load(args.core, args.ledger)
     lines = ["```mermaid", "flowchart LR"]
     lines += [f"    classDef {name} {style}" for name, style in MERMAID_CLASS.items()]
     lines.append("")
     groups = {}
     for item in items:
         groups.setdefault(item["release"], []).append(item)
-
-    def node(item):
-        title = item["title"].replace('"', "'")
-        return f'{item["id"]}["{item["code"]} {title}"]' if item["kind"] == "task" else f'{item["id"]}["{title}"]'
-
     for n, (release, members) in enumerate(groups.items()):
         indent = "    "
         if release:
             lines.append(f'    subgraph release_{n}["{release}"]')
             indent = "        "
-        lines += [indent + node(i) for i in members]
+        for item in members:
+            title = item["title"].replace('"', "'")
+            label = f"{item['id']} {title}" if item["kind"] == "task" else title
+            lines.append(f'{indent}{item["id"]}["{label}"]')
         if release:
             lines.append("    end")
     ids = {i["id"] for i in items}
@@ -381,56 +364,55 @@ def cmd_mermaid(args):
 
 
 def cmd_table(args):
-    state = load(args.state)
-    print("| Code | Task | Release | Status |")
+    items, _, _ = load(args.core, args.ledger)
+    print("| Task | Title | Release | Status |")
     print("|---|---|---|---|")
-    for item in sorted(state["items"], key=lambda i: i.get("order", len(state["items"]))):
+    for item in sorted(items, key=lambda i: i["order"]):
         if item["kind"] != "task":
             continue
-        title = f"[{item['title']}]({args.link}#{item['anchor']})" if item["anchor"] else item["title"]
+        title = f"[{item['title']}]({args.link.rstrip('/')}/{item['file']})" if item["file"] else item["title"]
         status = WORDS[item["status"]] + (f" ({item['note']})" if item["note"] else "")
-        print(f"| {item['code']} | {title} | {item['release'] or ''} | {status} |")
+        print(f"| {item['id']} | {title} | {item['release'] or ''} | {status} |")
+
+
+def cmd_section(args):
+    wanted = {slug(n) for n in args.names}
+    printing, found = False, set()
+    with open(args.file, encoding="utf-8") as f:
+        for line in f:
+            m = re.match(r"##\s+(.+?)\s*#*\s*$", line)
+            if m and not line.startswith("###"):
+                key = slug(m.group(1))
+                printing = key in wanted
+                if printing:
+                    found.add(key)
+            if printing:
+                sys.stdout.write(line)
+    missing = wanted - found
+    if missing:
+        sys.exit(f"no section: {', '.join(sorted(missing))}")
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
-    p = sub.add_parser("sync")
-    p.add_argument("state")
-    p.add_argument("--plan", required=True)
-    p.add_argument("--prefix", default="Task ")
-    p.add_argument("--title")
-    p.set_defaults(run=cmd_sync)
-    p = sub.add_parser("set")
-    p.add_argument("state")
-    p.add_argument("ids", nargs="+")
-    p.add_argument("--status", choices=STATUSES)
-    p.add_argument("--release")
-    p.add_argument("--note")
-    p.set_defaults(run=cmd_set)
-    p = sub.add_parser("add")
-    p.add_argument("state")
-    p.add_argument("id")
-    p.add_argument("--title", required=True)
-    p.add_argument("--gate", action="store_true")
-    p.add_argument("--after")
-    p.add_argument("--before")
-    p.add_argument("--release")
-    p.set_defaults(run=cmd_add)
-    p = sub.add_parser("show")
-    p.add_argument("state")
-    p.add_argument("--ascii", action="store_true")
-    p.add_argument("--color", choices=("auto", "always", "never"), default="auto")
-    p.add_argument("--repo", default=".")
-    p.add_argument("--width", type=int, default=20)
-    p.set_defaults(run=cmd_show)
-    p = sub.add_parser("mermaid")
-    p.add_argument("state")
-    p.set_defaults(run=cmd_mermaid)
-    p = sub.add_parser("table")
-    p.add_argument("state")
-    p.add_argument("--link", required=True)
-    p.set_defaults(run=cmd_table)
+    for name, run in (("show", cmd_show), ("times", cmd_times), ("mermaid", cmd_mermaid), ("table", cmd_table)):
+        p = sub.add_parser(name)
+        p.add_argument("core")
+        p.add_argument("ledger")
+        p.set_defaults(run=run)
+        if name == "show":
+            p.add_argument("--ascii", action="store_true")
+            p.add_argument("--color", choices=("auto", "always", "never"), default="auto")
+            p.add_argument("--repo", default=".")
+            p.add_argument("--width", type=int, default=20)
+            p.add_argument("--title")
+        if name == "table":
+            p.add_argument("--link", required=True)
+    p = sub.add_parser("section")
+    p.add_argument("file")
+    p.add_argument("names", nargs="+")
+    p.set_defaults(run=cmd_section)
     args = parser.parse_args()
     args.run(args)
 

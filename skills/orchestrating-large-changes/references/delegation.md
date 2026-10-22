@@ -1,124 +1,140 @@
-# Delegation: roles, worktrees, review packages
+# Delegation: lanes, reviews, merges
 
-With superpowers, superpowers:subagent-driven-development owns the per-task loop
-(implementer, task review, fix rounds capped at five, scoped re-review, parking minors) and
-its prompt templates. This file adds what parallel lanes need on top of it. Without
-superpowers, use the contracts below as the whole loop.
+With superpowers, superpowers:subagent-driven-development owns the per-task loop. This file
+overrides it where they differ: parallel lanes, the model policy, reviews against named
+concerns, re-reviews through the same reviewer, batch merges.
 
-## Roles and model tiers
+## Roles
 
-| Role | Model | Gets | Returns |
-|---|---|---|---|
-| Plan reviewer | most capable | criteria, spec, plan, handoff, code | findings file, counts |
-| Implementer | cheap tier for a mechanical one- or two-file task; standard or most capable for multi-file, contract-producing or subtle work | shared "how you work" file, task brief, lane row, constraints, its worktree and branch, report path | short status contract; full report in a file |
-| Task reviewer | scaled to the diff's size and risk | brief, report, review package | verdict and findings |
-| Fix-round re-reviewer | cheap to mid tier | findings, fix report, fix diff | ADDRESSED / NOT ADDRESSED per finding |
-| Final reviewer | most capable | criteria, plan, contract deltas, whole-branch diff (or one area of it) | findings file |
-| Live acceptance | the orchestrator itself | | ledger entries |
+| Role | Model | Reads |
+|---|---|---|
+| Plan reviewer | most capable | the whole plan, the code |
+| Implementer, fixer | most capable (cheap tier only for a docs-only task) | `implementer.md`, core, its task file, the contract sections it names |
+| Task reviewer | most capable | `reviewer.md`, core, the task file, `git diff`, the report |
+| Final reviewer | most capable | criteria, core, `contracts.md`, the branch diff (or one area) |
+| Live acceptance | the orchestrator | |
 
 The orchestrator never implements a task and never lets a delegate touch the outside world
-(installs, services, remote writes, the user's homes). Everything live runs in the
-orchestrator, one step at a time, so one agent holds the safety rules.
+(installs, services, remote writes, the user's homes).
 
-## Shared files instead of long prompts
+## Worktrees
 
-Write once in the plan workspace, point every dispatch at them:
+One worktree and branch per task, created by the orchestrator from the integration head.
+With Orca, as a child of the session's worktree, so the user sees them grouped:
+`orca worktree create` without `--no-parent` (or `--parent-worktree path:<session-worktree>`
+from outside it); an existing one with `orca worktree set --worktree path:<wt>
+--parent-worktree path:<session-worktree>`. Without Orca, `git worktree add <path> -b
+<branch> <integration-head>`. Report and review paths are absolute, in the run directory.
 
-- `implementer-common.md`: how every implementer works (below);
-- `constraints.md`: the plan's Global Constraints and the safety rules, verbatim;
-- `waves.md`: the lane table;
-- `task-<n>-brief.md`: the task's requirements with exact values to use verbatim;
-- `contract-deltas.md`: every change a task made to an interface the plan wrote, appended by
-  the orchestrator after each review, read by later implementers and the final reviewer.
+## Starting a task
 
-A dispatch is then five lines:
+A task starts when every contract it consumes exists in code, merged or in the producer's
+types-only first commit (branch from that commit), and its files do not overlap any task in
+flight, or the overlap is split by ownership in both task files. Producers merged or not. Log the start; a late producer change costs a rebase, cheap next to
+an hour of waiting.
+
+## Dispatch
 
 ~~~text
-You are implementing Task <n> of the <change> plan (<one-line goal>).
-WS=<plan-workspace>
-Read first: $WS/implementer-common.md, then $WS/task-<n>-brief.md, the T<n> row of $WS/waves.md, and $WS/constraints.md.
-Your worktree: <scratch>/wt/t<nn> (branch <prefix>/t<nn>-<slug>). Work and commit only there.
-Report file: <report-path>
+Implement <id> of <change>. Read <run-dir>/implementer.md, then <plan-dir>/core.md and <plan-dir>/tasks/<id>-<slug>.md.
+Worktree <path>, branch <branch>. Report <run-dir>/reports/<id>.md.
 ~~~
 
-## implementer-common.md
+## implementer.md
 
 ~~~markdown
-# How you work (every implementer)
+# How you work
 
-- Work only in your own worktree and branch. Never touch another worktree, never push, never switch branches.
-- Edit only the files your lane row's "May touch" allows, plus tests beside them. If the task truly needs another file, edit it minimally and say so in the report.
-- Nobody answers questions. When the brief is ambiguous or wrong against the code, decide by the spec and the success criteria, write "Ruling: <what> - <why> - <cost if wrong>" in the report, and finish as DONE_WITH_CONCERNS. BLOCKED only if no reasonable path exists.
-- Never touch the outside world: no remote writes, no installed binary, no services, no edits under the home directory outside your worktree. Tests use temporary homes.
-- Before committing, run <gate-command> and get it green. Each commit is green.
-- You do not dispatch subagents.
-- Self-review your diff before reporting.
+Plan files are read from <integration-worktree>/<plan-dir>; contracts.md there is current.
+Read only the contracts.md sections your task names.
 
-Report: write the full report (what you did, test commands with trimmed output, files changed, rulings, concerns) to the report file. Then reply with only, under 15 lines: Status (DONE | DONE_WITH_CONCERNS | BLOCKED | NEEDS_CONTEXT), commits (short SHA and subject), one-line test summary, concerns, report path.
+- Work only in your worktree and branch. Never push, switch branches or `git stash`.
+- Edit the task's Files, tests beside them, and call sites a signature change forces.
+  A contract in another task's Files is not yours to change: report the need as a concern.
+- Nobody answers questions. Decide by the criteria and the constraints, write
+  `Ruling: <what> - <why> - cost if wrong: <what>` in the report, finish DONE_WITH_CONCERNS.
+- Never touch the outside world: no remote writes, installs, services, or edits under the
+  home directory outside your worktree. Tests use temporary homes.
+- Fixtures from real data carry no personal data, and the script that reduced them is not
+  committed beside them.
+- Tests first: write each scenario's test, see it fail, implement, see it pass.
+- While iterating, test only the packages you touch.
 
-If resumed with review findings: fix them, re-run the covering tests, append a fix report to the same file, reply with the same short contract.
+Before you report:
+1. Attack each Review focus scenario your task touches against real local systems your
+   test starts in temporary directories or ports (a real git repository, a real store, a
+   real server binary), not only through your tests.
+2. Measure what your code costs per call or per sweep at realistic scale (<sizes>) and put
+   the number in the report.
+3. When you replace behavior, a differential test against the old code path passes.
+4. Rebase onto the integration head (`git -C <integration-worktree> rev-parse HEAD`), then
+   run the full gate once: <full-gate>.
+5. Any exported name you removed or renamed is in a declared contract delta.
+
+Report file, short: commits, rulings, contract deltas (ADDED/MODIFIED/REMOVED/RENAMED with
+full text), concerns, cost measured, gate result. Reply in under 10 lines: status (DONE |
+DONE_WITH_CONCERNS | BLOCKED), commits, gate, report path.
+Resumed with findings: fix, re-run the covering tests and the gate, append to the report.
 ~~~
 
-## Where a delegate can write
+## Review
 
-A delegate started with the harness's own worktree isolation may be unable to write outside
-that worktree, so a report path in the orchestrator's workspace fails. Pick one before
-dispatching:
+Every dispatch names the concerns to adjudicate. A reviewer told what to decide finds the
+real bug; one told "review this" restates the diff.
 
-- create the worktree yourself (`git worktree add <scratch>/wt/t<nn> -b <branch> <base>`) and
-  give the delegate the absolute report path in the plan workspace; or
-- with harness isolation, name a report path inside the delegate's worktree, untracked, and
-  copy it into the plan workspace when the delegate returns (or take the report from its
-  final message and write it yourself).
+~~~text
+Review <id>. Read <run-dir>/reviewer.md, <plan-dir>/core.md, <plan-dir>/tasks/<id>-<slug>.md, the report <run-dir>/reports/<id>.md.
+Diff: git -C <worktree> diff <integration-branch>...<head> (three dots: from the merge base, valid after rebases). Findings to <run-dir>/reviews/<id>.md.
+Adjudicate: <for each, one line: the implementer's concern or ruling, a review focus scenario, a cost claim; "decide bug or accepted difference, give the fix and the file">.
+~~~
 
-Either way, record in the ledger where the report is.
+~~~markdown
+# How you review
 
-## Review packages
+Read-only in the task's worktree; you may run tests there. Check: every scenario has its
+named test and it fails without the change; the review focus scenarios the task touches,
+tried against real systems; the declared contract deltas are needed, exact, and break no
+task file; each named concern decided. Severity: Critical (wrong behavior, data loss, a
+broken constraint), Important (a missing scenario test, an unusable contract), Minor.
+Mark a Minor fix-now only when cheap and otherwise carried into later tasks.
+Findings file: per finding, severity, file:line, failure scenario, fix. Reply in under
+6 lines: CLEAN | NEEDS FIXES, counts, path.
+~~~
 
-Reviewers read files, not your context. Before dispatching a review, write the diff once:
+**Fix rounds.** The findings go to the implementer that holds the context: resume it with
+SendMessage by its agent id. The re-review goes to the same reviewer the same way, scoped to
+the findings and the fix diff, appended to the same review file. A trivial fix (one line,
+a test name, a message) the orchestrator re-reviews inline by reading the diff, and logs
+it; a fix that touches a contract is never trivial. A flaw found later in a
+merged task goes, by ruling, to whoever holds that context: the task in flight that touches
+those files, or a fresh fixer.
+
+**Named teammates.** On Claude Code with agent teams, a *named* agent's final text does not
+come back; only an idle signal does. Use unnamed agents and resume them by id. When you name
+one, its prompt must say: "When done, send your full report with SendMessage to
+<orchestrator-name>." An idle one has not failed: collect its branch and report first.
+
+## Merging in batches
+
+Merge every task reviewed clean, back to back, in graph order (then by task number), then
+gate once:
 
 ~~~bash
-git -C <worktree> log --oneline <base>..<head> > <ws>/review-<base>..<head>.diff
-git -C <worktree> diff --stat <base>..<head> >> <ws>/review-<base>..<head>.diff
-git -C <worktree> diff -U10 <base>..<head> >> <ws>/review-<base>..<head>.diff
+git merge --no-ff <branch>       # each task in the batch
+<fold its contract deltas into contracts.md; amend the merge commit>
+<fast-gate>                      # seconds, after each merge
+<full-gate>                      # once per batch, with the expensive variants
+git worktree remove <path>; git branch -d <branch>    # each merged task
 ~~~
 
-The review dispatch names: the brief, the report, the package path, base and head, the
-checkout to inspect read-only, and the output path. The reviewer replies with the verdict
-and the path; you read the findings file only when the verdict is not clean.
-
-## Named teammates
-
-Some harnesses offer persistent named agents (agent teams). On Claude Code with agent teams
-enabled, a named agent's final text does not come back to the caller; only an idle signal
-arrives, and the work stays in its own transcript. Use unnamed subagents for one-shot work.
-When you name one, the spawn prompt must say: "When done, send your full report with
-SendMessage to <orchestrator-name>, in the message body." If one goes idle without
-reporting, collect its branch and report file before re-sending anything.
-
-## Integration
-
-After each wave's tasks are complete (reviewed clean):
-
-~~~bash
-git switch <integration-branch>
-git merge --no-ff <prefix>/t01-<slug>      # task order, producers first
-<gate-command>                              # the wave's integration check, from the plan
-git worktree remove <scratch>/wt/t01
-git branch -d <prefix>/t01-<slug>          # -d refuses an unmerged branch: a useful check
-~~~
-
-Resolve conflicts in the integration branch only when they are mechanical (import blocks,
-adjacent additions); anything that changes behavior goes back to a fix task branched from
-the integration head. Worktrees are ephemeral: a worktree exists only while its task runs,
-and a wave is not done until `git worktree list` and `git branch --list '<prefix>/*'` show
-nothing of it.
+On a red full gate, bisect the batch's merge commits (`git bisect` over `--first-parent`),
+send the fix to the task that broke it, and keep the other merges. Resolve conflicts in the
+integration branch only when mechanical (imports, adjacent additions; never a contract); anything that changes behavior goes back to a
+fixer. A task is not done while its worktree or branch exists.
 
 ## Final review
 
-On the most capable model, over the whole branch against the criteria and the plan. When the
-diff is larger than one reviewer can read carefully, split it into areas that follow the
-architecture (domain and core; transport and clients; CLI, install and docs), give each the
-plan and the contract deltas, and log the split as a ruling with its cost (a cross-area issue
-can fall between them). Every Critical and Important finding and every minor marked fix-now
-goes to one fix wave, re-reviewed by scope. The rest is parked in the ledger with a ruling.
+Whole branch, most capable model, against the criteria, core and `contracts.md`. Too large
+for one careful read: split by architectural area, log the split as a ruling (a cross-area
+issue can fall between them). Critical, Important and fix-now go to one fix batch,
+re-reviewed by scope; the rest is parked with a ruling.
