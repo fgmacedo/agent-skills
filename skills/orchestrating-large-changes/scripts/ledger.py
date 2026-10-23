@@ -4,13 +4,14 @@
   python3 ledger.py times CORE LEDGER
   python3 ledger.py mermaid CORE LEDGER
   python3 ledger.py table CORE LEDGER --link DIR
-  python3 ledger.py section FILE NAME...
+  python3 ledger.py add LEDGER TEXT... [--tz ZONE]
 
 CORE is the plan's core.md: its first Mermaid flowchart gives the nodes, the edges and the
 releases (subgraphs). A node with a file in tasks/ next to CORE (tasks/T7-slug.md or
 tasks/T7.md), or with an id like T7, is a task; any other node is a gate. LEDGER lines of the form
 "- HH:MM ID[,ID...] EVENT details" set the status; "## YYYY-MM-DD" headings set the day.
 EVENT is one of: dispatched, started, reported, clean, fix, merged, passed, held, dropped.
+`add` appends "- HH:MM TEXT", now in ZONE (default: local), after a day heading if new.
 """
 
 import argparse
@@ -20,6 +21,7 @@ import re
 import shutil
 import subprocess
 import sys
+from zoneinfo import ZoneInfo
 
 STATUSES = ("todo", "wip", "review", "done", "held", "dropped")
 EVENTS = {
@@ -58,10 +60,6 @@ NODE = re.compile(r"^([A-Za-z_][\w-]*)\s*(?:\[\"?(.*?)\"?\]|\(\"?(.*?)\"?\)|\{\"
 ARROW = re.compile(r"\s*(?:<?-->|<?==>|-\.->|---|--[^-<>|]+-->)\s*")
 DAY = re.compile(r"^#+\s+(\d{4}-\d{2}-\d{2})\b")
 LINE = re.compile(r"^-\s+(\d{1,2}:\d{2})\s+([A-Za-z_][\w-]*(?:,[A-Za-z_][\w-]*)*)\s+(%s)\b\s*(.*)$" % "|".join(EVENTS))
-
-
-def slug(text):
-    return re.sub(r"[^\w\- ]", "", text.strip().lower()).replace(" ", "-")
 
 
 def plan_graph(text):
@@ -375,22 +373,20 @@ def cmd_table(args):
         print(f"| {item['id']} | {title} | {item['release'] or ''} | {status} |")
 
 
-def cmd_section(args):
-    wanted = {slug(n) for n in args.names}
-    printing, found = False, set()
-    with open(args.file, encoding="utf-8") as f:
-        for line in f:
-            m = re.match(r"##\s+(.+?)\s*#*\s*$", line)
-            if m and not line.startswith("###"):
-                key = slug(m.group(1))
-                printing = key in wanted
-                if printing:
-                    found.add(key)
-            if printing:
-                sys.stdout.write(line)
-    missing = wanted - found
-    if missing:
-        sys.exit(f"no section: {', '.join(sorted(missing))}")
+def cmd_add(args):
+    now = datetime.datetime.now(ZoneInfo(args.tz) if args.tz else None)
+    last_day = None
+    if os.path.exists(args.ledger):
+        with open(args.ledger, encoding="utf-8") as f:
+            for line in f:
+                dm = DAY.match(line)
+                if dm:
+                    last_day = dm.group(1)
+    today = now.date().isoformat()
+    with open(args.ledger, "a", encoding="utf-8") as f:
+        if last_day != today:
+            f.write(f"\n## {today}\n")
+        f.write(f"- {now:%H:%M} {' '.join(args.text)}\n")
 
 
 def main():
@@ -409,10 +405,11 @@ def main():
             p.add_argument("--title")
         if name == "table":
             p.add_argument("--link", required=True)
-    p = sub.add_parser("section")
-    p.add_argument("file")
-    p.add_argument("names", nargs="+")
-    p.set_defaults(run=cmd_section)
+    p = sub.add_parser("add")
+    p.add_argument("ledger")
+    p.add_argument("text", nargs="+")
+    p.add_argument("--tz")
+    p.set_defaults(run=cmd_add)
     args = parser.parse_args()
     args.run(args)
 

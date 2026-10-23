@@ -1,7 +1,9 @@
 # Final report template
 
 For a person who was away and will spend minutes. Facts with evidence; the ledger holds the
-full outputs. Commit it next to the plan. Generate the progress parts with
+full outputs. Write it to `<run-dir>/report.md`, never in the repository; the PR body
+carries a short summary (what shipped, how to validate, rollback).
+Generate the progress parts with
 `scripts/ledger.py` (`show --ascii --color never`, `mermaid`, `table`, `times`).
 
 ~~~markdown

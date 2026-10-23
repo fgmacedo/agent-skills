@@ -116,16 +116,16 @@ Refactoring as a sequence of reviewable commits. Guides the agent through:
 
 A method for delivering a change too large for one context, with one agent as orchestrator and integrator. Guides the agent through:
 
-1. **Plan in two levels**: a short shared core (goal, constraints, review focus, dependency graph) and one file per task with its files, its real overlap with other tasks, and requirements as WHEN/THEN scenarios that name their tests; a delegate reads the core and its own file, never the whole plan
-2. **Contracts as current state**: OpenSpec-style deltas (ADDED, MODIFIED, REMOVED, RENAMED) folded into `contracts.md` at each merge
+1. **Short prose plan**: a shared core (goal, constraints, review focus, dependency graph) and one short file per task naming the packages it owns and its test stubs; a delegate reads the core, its own file and the API docs of what it consumes
+2. **Contracts in code**: a skeleton task commits compiling types, fakes, conformance tests, wire fixtures, registration points and every task's tests as skipped stubs before the fan-out; an API-diff check replaces hand-kept contract deltas; Go idioms in `references/go.md`
 3. **Settle risk once, after the plan**: the questions only the user can answer, asked in one message with defaults, written into a handoff with binding rules and a definition of done
-4. **Harden the plan**: an adversarial review against the code before the first delegation
-5. **Run the lanes**: a task starts when its contracts are written and its files do not overlap a task in flight; implementers attack the review focus, measure cost at scale and rebase before reporting; reviewers adjudicate named concerns from `git diff`; re-reviews go back to the same reviewer; merges in batches with the full gate once per batch
-6. **Rule, do not ask**: `Ruling: what - why - cost if wrong`, one ledger line per state change; reserved items are skipped and reported, never bypassed
+4. **Harden the plan**: a flake-free baseline under parallel load, then an adversarial review of the plan and the skeleton before the first delegation
+5. **Run the lanes**: a task starts when its files do not overlap a task in flight; implementers unskip their stubs, attack the review focus, measure cost at scale and run a per-package lane check; reviewers adjudicate named concerns from `git diff`; carried findings become skipped tests; merges in batches with one integration gate per batch, at most two heavy runs at once
+6. **Rule, do not ask**: `Ruling: what - why - cost if wrong`, one ledger line per state change, appended by `scripts/ledger.py add` in the command that acts; reserved items are skipped and reported, never bypassed
 7. **Progress from the ledger**: `scripts/ledger.py` reads the plan's graph and the ledger and prints the terminal board, the wall-time table, the report's Mermaid graph and task table
-8. **Rehearse and accept live, final review, cleanup and report**: a sandbox with scripted actors, evidence per item, every ruling, gaps, the user's validation and rollback steps
+8. **Rehearse and accept live, final review, cleanup and report**: specs, plans, ledger and report stay in a run directory outside the repository and are never committed; the PR holds code, tests and the user-facing docs the change needs; a sandbox with scripted actors, evidence per item, every ruling, gaps, the user's validation and rollback steps
 
-When the result is pull requests in several repositories and Orca is present, the orchestrator delegates one sub-orchestrator per repository as an Orca supervised worker; each runs the same method on its slice and negotiates contract changes with the parent through Orca messages. In one repository, plain subagents and agent teams are enough.
+When the result is pull requests in several repositories and Orca is present, the orchestrator delegates one sub-orchestrator per repository as an Orca supervised worker; each runs the same method on its slice and negotiates changes to cross-repository contracts, kept as code in their owner repository, with the parent through Orca messages. In one repository, plain subagents and agent teams are enough.
 
 Composes with the `superpowers` skills (writing-plans, subagent-driven-development, requesting-code-review, using-git-worktrees, finishing-a-development-branch) and works in a reduced form without them.
 

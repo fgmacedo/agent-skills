@@ -1,6 +1,7 @@
 # Handoff template
 
-The only thing the orchestrator is sure to read. Commit it next to the plan. Everything in it
+The only thing the orchestrator is sure to read. Write it in the run directory, next to the
+plan; never commit it. Everything in it
 comes from the plan and the user's answers to `risk-questions.md`.
 
 ~~~markdown
@@ -15,7 +16,8 @@ Read: <plan-dir>/criteria.md (binding), <plan-dir>/core.md, the task files as yo
 Run directory (outside every worktree): <run-dir>. Times in <zone>.
 
 ## How to work
-- Harden the plan first, then run the lanes. Multi-agent orchestration is opted in: <tools>.
+- First a flake-free baseline: the integration gate <lanes/4> times at once, fix what
+  fails intermittently. Then T0, the plan review, the lanes. Multi-agent: <tools>.
 - Never stop to ask. Decide by the criteria and the user's decisions, log a ruling with its
   cost, fix and retry. Changing the plan is allowed; violating the criteria, the decisions
   <ids> or the rules below is not.

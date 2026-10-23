@@ -3,19 +3,14 @@
 The user owns every decision about risk. Ask them all in one message, after the plan exists
 and before the run, so the run never waits on a person.
 
-1. List every task that touches something outside the repository: an installed binary, a
-   service, a config or home directory, a database, a remote API, a shared repository,
-   another tool's state. The questions come from those tasks.
-2. One message, each question with the default you propose and why; the user answers by
-   exception ("all defaults, except 4"). Use the harness's question tool for the two or
-   three with real alternatives.
-3. Replace every human stop point ("the user installs", "after a day of use") with a
-   criterion an agent evaluates and the permission to act. What truly needs the person is
-   reserved and worked around, never a gate the run waits on.
-4. Prepare what the answers allow: backup with checksums, sandbox with scripted actors,
-   snapshot of the user's resources.
-5. Write the answers into the handoff so a fresh agent applies them without this
-   conversation.
+1. The questions come from every task that touches something outside the repository: a
+   binary, a service, a config or home directory, a database, a remote API, another tool.
+2. One message, each question with your default and why; the user answers by exception
+   ("all defaults, except 4"). The harness's question tool for the few real alternatives.
+3. Every human stop point ("the user installs", "after a day of use") becomes a criterion
+   an agent evaluates. What truly needs the person is reserved and worked around.
+4. Prepare what the answers allow: backup with checksums, sandbox, snapshot.
+5. Write the answers into the handoff, so a fresh agent applies them.
 
 Ask only the rows the plan touches.
 
@@ -38,7 +33,7 @@ Ask only the rows the plan touches.
 | 15 | Spend: models, paid APIs, CI minutes | Most capable model for every task that changes code and every review; cheap tier for docs |
 | 16 | Multi-agent opt-in: subagents, agent teams, workflows | Yes |
 | 17 | Reserved: what the run never decides alone | 3, 9, 12 and anything irreversible outside the sandbox |
-| 18 | Hand-back: where the report goes, how the user learns the run ended | Report in the repository plus one line where the user looks first |
+| 18 | Hand-back: where the report goes, how the user learns the run ended | Report in the run directory, its path where the user looks first; a summary in each PR body |
 
 Not here: design questions the plan settled, and anything a measurement in the run can
 settle. Those are rulings.

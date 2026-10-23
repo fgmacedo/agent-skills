@@ -9,9 +9,8 @@ The orchestrator runs it, one step at a time, in a sandbox the handoff allows.
   reads copies.
 - **Snapshot** of the user's resources (workspaces, sessions, PRs, branches, cards, config
   files) in the run directory. The final step compares against it.
-- **Sandbox** the run may write to freely, with the other actors scripted (one account
-  cannot review its own PR, so a CI workflow acting as a bot opens PRs, requests reviews,
-  comments and fails checks on demand). Smoke-test each script before the run.
+- **Sandbox** the run may write to freely, with the other actors scripted (a CI workflow
+  as a bot opens PRs, reviews, comments and fails checks on demand). Smoke-test each script before the run.
 - **Run prefix** on everything the run creates (`<project>-e2e-<timestamp>-<case>`).
 
 ## Rehearsal
